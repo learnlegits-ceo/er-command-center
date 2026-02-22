@@ -19,8 +19,12 @@ async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
     print(f"Starting {settings.APP_NAME}...")
-    # Initialize database tables (in production, use migrations)
-    # await init_db()
+    # Create tables if migrations didn't run (fallback for cloud deployments)
+    try:
+        await init_db()
+        print("Database tables ready.")
+    except Exception as e:
+        print(f"Warning: Could not init DB tables: {e}")
     yield
     # Shutdown
     print(f"Shutting down {settings.APP_NAME}...")

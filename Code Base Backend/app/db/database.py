@@ -6,11 +6,13 @@ from typing import AsyncGenerator
 from app.core.config import settings
 
 # Create async engine
+# statement_cache_size=0 required for Supabase transaction pooler (port 6543)
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
-    poolclass=NullPool,  # Required for Lambda
-    future=True
+    poolclass=NullPool,
+    future=True,
+    connect_args={"statement_cache_size": 0},
 )
 
 # Create async session maker
