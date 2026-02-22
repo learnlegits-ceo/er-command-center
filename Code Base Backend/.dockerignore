@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+docs/
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Database
+*.db
+*.sqlite
+postgres_data/
+
+# Logs
+*.log
+logs/
+
+# Uploads (for development)
+uploads/
+
+# Node modules (if any)
+node_modules/
+
+# Lambda specific (not needed for Docker)
+lambda_handler.py
+workers/
+serverless.yml
+.serverless/

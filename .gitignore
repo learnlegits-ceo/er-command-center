@@ -1,0 +1,62 @@
+# ============================================================
+# ROOT GITIGNORE - ER Command Center
+# ============================================================
+
+# ---- SECRETS (NEVER commit these) ----
+.env
+.env.local
+.env.production
+.env.production.local
+.env.development.local
+*.env
+
+# ---- Python / Backend ----
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ---- Node / Frontend ----
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- Database / Temp Files ----
+*.db
+*.sqlite3
+nul
+
+# ---- Editor / OS ----
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ---- Docker volumes / local data ----
+postgres_data/
+redis_data/

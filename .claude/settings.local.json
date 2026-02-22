@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(python setup_all.py:*)",
+      "Bash(python -m uvicorn:*)",
+      "Bash(timeout /t 5 /nobreak)",
+      "Bash(ping:*)",
+      "Bash(python:*)",
+      "Bash(docker stop:*)"
+    ]
+  }
+}

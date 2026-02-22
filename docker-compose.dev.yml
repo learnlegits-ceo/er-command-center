@@ -1,0 +1,94 @@
+version: '3.8'
+
+# Combined Development Environment - Frontend + Backend
+# Use this for local development only
+# For production: Deploy frontend to Vercel, backend to Docker separately
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: er_postgres_dev
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: er_command_center
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./Code Base Backend/database_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - er_dev_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: er_redis_dev
+    ports:
+      - "6379:6379"
+    networks:
+      - er_dev_network
+
+  # Backend API
+  backend:
+    build:
+      context: ./Code Base Backend
+      dockerfile: Dockerfile
+    container_name: er_backend_dev
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      SECRET_KEY: dev-secret-key-change-in-production
+      JWT_SECRET_KEY: dev-jwt-secret-key
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/er_command_center
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./Code Base Backend/app:/app/app
+      - ./Code Base Backend/alembic:/app/alembic
+    networks:
+      - er_dev_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+
+  # Frontend (React + Vite)
+  frontend:
+    build:
+      context: ./Code Base Frontend
+      dockerfile: Dockerfile.dev
+    container_name: er_frontend_dev
+    environment:
+      - VITE_API_URL=http://localhost:8000/api/v1
+      - VITE_APP_ENV=development
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./Code Base Frontend/src:/app/src
+      - ./Code Base Frontend/public:/app/public
+      - ./Code Base Frontend/index.html:/app/index.html
+      - /app/node_modules
+    networks:
+      - er_dev_network
+    depends_on:
+      - backend
+    command: npm run dev -- --host
+    restart: unless-stopped
+
+volumes:
+  postgres_dev_data:
+    driver: local
+
+networks:
+  er_dev_network:
+    driver: bridge
