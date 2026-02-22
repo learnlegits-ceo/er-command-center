@@ -2,11 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import traceback
+import uuid
 
 from app.db.database import get_db
 from app.models.user import User, UserSession, PasswordResetToken
+from app.models.tenant import Tenant
+from app.models.department import Department
 from app.schemas.auth import (
     LoginRequest,
     ForgotPasswordRequest, VerifyOTPRequest, ResetPasswordRequest,
@@ -469,4 +472,95 @@ async def get_current_user_info(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed: {str(e)}"
+        )
+
+
+@router.post("/seed-database")
+async def seed_database(db: AsyncSession = Depends(get_db)):
+    """One-time database seeding. Only works on an empty database."""
+    try:
+        # Refuse to run if users already exist
+        result = await db.execute(select(User).limit(1))
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Database already seeded. This endpoint only works on an empty database."
+            )
+
+        tenant_id = uuid.uuid4()
+        tenant = Tenant(
+            id=tenant_id,
+            name="City General Hospital",
+            code="CGH001",
+            domain="citygeneral.health",
+            address="123 Medical Center Drive, Healthcare City",
+            phone="+1-555-0100",
+            email="admin@citygeneral.health",
+            subscription_plan="enterprise",
+            subscription_status="active",
+            max_users=200,
+            max_beds=500,
+            is_active=True
+        )
+        db.add(tenant)
+
+        dept = Department(
+            id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            name="Emergency Department",
+            code="ED",
+            description="Emergency Department - Providing specialized care",
+            floor="Ground Floor",
+            capacity=30,
+            is_active=True
+        )
+        db.add(dept)
+
+        # Flush so dept.id is available
+        await db.flush()
+
+        demo_users = [
+            {"name": "Priya Sharma", "email": "priya@hospital.com", "password": "nurse123", "role": "nurse", "emp": "DEMO1", "phone": "+91-9876543210"},
+            {"name": "Dr. Ananya Patel", "email": "ananya@hospital.com", "password": "doctor123", "role": "doctor", "emp": "DEMO2", "phone": "+91-9876543211", "spec": "Emergency Medicine"},
+            {"name": "Rajesh Kumar", "email": "rajesh@hospital.com", "password": "admin123", "role": "admin", "emp": "DEMO3", "phone": "+91-9876543212"},
+        ]
+
+        for u in demo_users:
+            user = User(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                employee_id=u["emp"],
+                email=u["email"],
+                password_hash=get_password_hash(u["password"]),
+                name=u["name"],
+                role=u["role"],
+                department_id=dept.id,
+                phone=u["phone"],
+                specialization=u.get("spec"),
+                status="active",
+                joined_at=date.today() - timedelta(days=365)
+            )
+            db.add(user)
+
+        await db.commit()
+        print("[SEED] Database seeded successfully!")
+
+        return {
+            "success": True,
+            "message": "Database seeded! You can now log in.",
+            "credentials": [
+                {"role": "nurse", "email": "priya@hospital.com", "password": "nurse123"},
+                {"role": "doctor", "email": "ananya@hospital.com", "password": "doctor123"},
+                {"role": "admin", "email": "rajesh@hospital.com", "password": "admin123"},
+            ]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[SEED] Error: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Seeding failed: {str(e)}"
         )
