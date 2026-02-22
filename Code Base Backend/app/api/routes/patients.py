@@ -171,10 +171,27 @@ async def get_patients(
             )
         )
 
-    # Get total count
-    count_result = await db.execute(
-        select(func.count()).select_from(query.subquery())
+    # Get total count using a clean separate query (avoids ORM subquery issues)
+    count_query = select(func.count(Patient.id)).where(
+        Patient.tenant_id == current_user.tenant_id,
+        Patient.deleted_at.is_(None)
     )
+    if status and status != "all":
+        count_query = count_query.where(Patient.status == status)
+    if department:
+        count_query = count_query.join(Department).where(
+            or_(Department.name == department, Department.code == department)
+        )
+    if priority:
+        count_query = count_query.where(Patient.priority == priority)
+    if search:
+        count_query = count_query.where(
+            or_(
+                Patient.name.ilike(f"%{search}%"),
+                Patient.patient_id.ilike(f"%{search}%")
+            )
+        )
+    count_result = await db.execute(count_query)
     total = count_result.scalar() or 0
 
     # Apply pagination

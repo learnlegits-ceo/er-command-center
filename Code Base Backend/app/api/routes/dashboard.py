@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from app.db.database import get_db
@@ -126,8 +126,8 @@ async def get_dashboard_stats(
     )
     alerts_critical = critical_alerts.scalar() or 0
 
-    # Today's stats
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    # Today's stats (timezone-aware for TIMESTAMPTZ columns)
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
     admissions_today = await db.execute(
         select(func.count(Patient.id)).where(
@@ -337,7 +337,7 @@ async def get_patient_flow(
 
     # Generate triage time data (last 8 hours)
     triage_time = []
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     for i in range(8):
         hour = (now - timedelta(hours=7-i)).strftime("%H:00")
         # Generate realistic values between 5-25 minutes
@@ -382,7 +382,7 @@ async def get_patient_flow(
     # Generate discharge vs admission data (last 7 days)
     discharge_admission = []
     days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    today = datetime.utcnow()
+    today = datetime.now(timezone.utc)
 
     for i in range(7):
         day_start = (today - timedelta(days=6-i)).replace(hour=0, minute=0, second=0, microsecond=0)
