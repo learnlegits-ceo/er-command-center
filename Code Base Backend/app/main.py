@@ -35,9 +35,9 @@ app = FastAPI(
     title=settings.APP_NAME,
     description="Healthcare ER Command Center API - Multi-tenant AI-powered triage system",
     version="1.0.0",
-    docs_url="/api/docs" if settings.DEBUG else None,
-    redoc_url="/api/redoc" if settings.DEBUG else None,
-    openapi_url="/api/openapi.json" if settings.DEBUG else None,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan
 )
 

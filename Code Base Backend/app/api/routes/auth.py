@@ -475,6 +475,7 @@ async def get_current_user_info(
         )
 
 
+@router.get("/seed-database")
 @router.post("/seed-database")
 async def seed_database(db: AsyncSession = Depends(get_db)):
     """One-time database seeding. Only works on an empty database."""
