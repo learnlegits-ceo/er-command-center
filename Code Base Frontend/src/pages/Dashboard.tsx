@@ -38,9 +38,10 @@ export default function Dashboard() {
 
   // Fetch real data from backend APIs
   const { data: stats, isLoading: statsLoading, error: statsError } = useDashboardStats()
-  // Show all patients across all departments
+  // Filter patients by selected department
   const { data: patients, isLoading: patientsLoading, error: patientsError } = usePatients({
-    status: 'all'
+    status: 'all',
+    department: departmentName
   })
   const { data: alerts, isLoading: alertsLoading, error: alertsError } = useActiveAlerts()
   const { data: patientFlow } = usePatientFlow()
