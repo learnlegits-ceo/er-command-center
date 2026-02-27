@@ -4,13 +4,15 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from uuid import UUID
 import uuid as uuid_mod
-from datetime import datetime
+import random
+from datetime import datetime, date, timedelta
 from typing import Optional
 
 from app.db.database import get_db
 from app.models.user import User, UserSettings
 from app.models.department import Department
 from app.models.bed import Bed
+from app.models.patient import Patient, PatientVitals
 from app.models.audit import AuditLog
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.schemas.common import SuccessResponse
@@ -469,4 +471,207 @@ async def initialize_beds(
     return {
         "success": True,
         "message": f"Created {created} beds across {len(departments) - skipped} departments. {skipped} departments already had beds."
+    }
+
+
+@router.post("/seed-patients", response_model=dict)
+async def seed_patients(
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Seed sample patients across all departments. Idempotent — skips if patients already exist."""
+    # Check if patients already exist
+    patient_count_result = await db.execute(
+        select(func.count(Patient.id)).where(
+            Patient.tenant_id == current_user.tenant_id,
+            Patient.deleted_at.is_(None)
+        )
+    )
+    existing_count = patient_count_result.scalar() or 0
+    if existing_count >= 20:
+        return {
+            "success": True,
+            "message": f"Database already has {existing_count} patients. Skipping seed."
+        }
+
+    # Get departments
+    dept_result = await db.execute(
+        select(Department).where(Department.tenant_id == current_user.tenant_id)
+    )
+    departments = {d.code: d for d in dept_result.scalars().all()}
+
+    if not departments:
+        raise HTTPException(status_code=400, detail="No departments found. Create departments first.")
+
+    # Get doctors and nurses per department
+    staff_result = await db.execute(
+        select(User).where(
+            User.tenant_id == current_user.tenant_id,
+            User.role.in_(["doctor", "nurse"]),
+            User.deleted_at.is_(None)
+        )
+    )
+    all_staff = staff_result.scalars().all()
+    doctors_by_dept: dict = {}
+    nurses_by_dept: dict = {}
+    for s in all_staff:
+        dept_id = str(s.department_id) if s.department_id else None
+        if not dept_id:
+            continue
+        if s.role == "doctor":
+            doctors_by_dept.setdefault(dept_id, []).append(s)
+        else:
+            nurses_by_dept.setdefault(dept_id, []).append(s)
+
+    # Get available beds per department
+    beds_result = await db.execute(
+        select(Bed).where(
+            Bed.tenant_id == current_user.tenant_id,
+            Bed.status == "available",
+            Bed.is_active == True
+        ).order_by(Bed.bed_number)
+    )
+    all_beds = beds_result.scalars().all()
+    beds_by_dept: dict = {}
+    for b in all_beds:
+        dept_id = str(b.department_id)
+        beds_by_dept.setdefault(dept_id, []).append(b)
+
+    # Sample patient data per department code
+    PATIENT_DATA = {
+        "ED": [
+            {"name": "John Smith", "age": 45, "gender": "M", "complaint": "Severe chest pain radiating to left arm", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "A+"},
+            {"name": "Maria Garcia", "age": 32, "gender": "F", "complaint": "High fever with severe headache and stiff neck", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "O+"},
+            {"name": "Robert Johnson", "age": 58, "gender": "M", "complaint": "Difficulty breathing, history of COPD", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "B+"},
+            {"name": "Emily Brown", "age": 28, "gender": "F", "complaint": "Severe abdominal pain, vomiting blood", "priority": 2, "priority_label": "L2 - Emergent", "status": "pending_triage", "blood_group": "AB+"},
+            {"name": "David Wilson", "age": 67, "gender": "M", "complaint": "Sudden weakness on right side, slurred speech", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "O-"},
+        ],
+        "ECU": [
+            {"name": "Sunita Devi", "age": 55, "gender": "F", "complaint": "Sudden weakness, dizziness, near-syncope", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "A+"},
+            {"name": "Karthik Reddy", "age": 48, "gender": "M", "complaint": "Chest discomfort with palpitations", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "B+"},
+            {"name": "Anita Verma", "age": 62, "gender": "F", "complaint": "Acute gastritis with severe vomiting", "priority": 3, "priority_label": "L3 - Urgent", "status": "pending_triage", "blood_group": "O+"},
+        ],
+        "TC": [
+            {"name": "Rahul Sharma", "age": 25, "gender": "M", "complaint": "Fall from height, suspected head injury", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "O+"},
+            {"name": "Priya Nair", "age": 31, "gender": "F", "complaint": "Motor vehicle accident, open fracture right leg", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "A+"},
+            {"name": "Suresh Babu", "age": 40, "gender": "M", "complaint": "Industrial crush injury, left hand", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "B-"},
+        ],
+        "OPD": [
+            {"name": "Michael Lee", "age": 35, "gender": "M", "complaint": "Follow-up for diabetes management", "priority": 4, "priority_label": "L4 - Non-Urgent", "status": "pending_triage", "blood_group": "B+"},
+            {"name": "Jennifer Taylor", "age": 42, "gender": "F", "complaint": "Annual health checkup", "priority": 4, "priority_label": "L4 - Non-Urgent", "status": "pending_triage", "blood_group": "O+"},
+            {"name": "Christopher Moore", "age": 55, "gender": "M", "complaint": "Hypertension medication review", "priority": 4, "priority_label": "L4 - Non-Urgent", "status": "admitted", "blood_group": "A+"},
+            {"name": "Amanda Martinez", "age": 29, "gender": "F", "complaint": "Persistent cough for 2 weeks", "priority": 3, "priority_label": "L3 - Urgent", "status": "pending_triage", "blood_group": "AB+"},
+        ],
+        "ICU": [
+            {"name": "George Harris", "age": 72, "gender": "M", "complaint": "Post cardiac surgery - triple bypass", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "O+"},
+            {"name": "Patricia Clark", "age": 65, "gender": "F", "complaint": "Severe pneumonia with respiratory failure", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "A+"},
+            {"name": "James Lewis", "age": 48, "gender": "M", "complaint": "Multi-organ failure - sepsis", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "B+"},
+        ],
+        "GW": [
+            {"name": "Nancy Young", "age": 45, "gender": "F", "complaint": "Post appendectomy - Day 2", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "A+"},
+            {"name": "Steven King", "age": 56, "gender": "M", "complaint": "Diabetic foot ulcer treatment", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "B+"},
+            {"name": "Dorothy Wright", "age": 68, "gender": "F", "complaint": "Hip replacement recovery - Day 4", "priority": 4, "priority_label": "L4 - Non-Urgent", "status": "admitted", "blood_group": "O+"},
+        ],
+        "PED": [
+            {"name": "Tommy Adams", "age": 8, "gender": "M", "complaint": "Asthma exacerbation", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "O+"},
+            {"name": "Sophie Nelson", "age": 5, "gender": "F", "complaint": "High fever with ear infection", "priority": 3, "priority_label": "L3 - Urgent", "status": "pending_triage", "blood_group": "A+"},
+            {"name": "Lucas Carter", "age": 12, "gender": "M", "complaint": "Fractured arm - sports injury", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "B+"},
+        ],
+        "CARD": [
+            {"name": "Margaret Roberts", "age": 62, "gender": "F", "complaint": "Atrial fibrillation - rate control", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "A+"},
+            {"name": "Frank Turner", "age": 70, "gender": "M", "complaint": "Congestive heart failure - fluid management", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "B+"},
+            {"name": "Betty Parker", "age": 74, "gender": "F", "complaint": "Hypertensive crisis", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "A-"},
+        ],
+    }
+
+    created = 0
+    beds_assigned = 0
+    patient_counter = existing_count + 1
+
+    for dept_code, patients_list in PATIENT_DATA.items():
+        dept = departments.get(dept_code)
+        if not dept:
+            continue
+
+        dept_id = str(dept.id)
+        dept_doctors = doctors_by_dept.get(dept_id, [])
+        dept_nurses = nurses_by_dept.get(dept_id, [])
+        dept_beds = beds_by_dept.get(dept_id, [])
+        bed_idx = 0
+
+        for p_data in patients_list:
+            # Check if patient with same name already exists in this department
+            existing = await db.execute(
+                select(Patient.id).where(
+                    Patient.tenant_id == current_user.tenant_id,
+                    Patient.name == p_data["name"],
+                    Patient.department_id == dept.id,
+                    Patient.deleted_at.is_(None)
+                )
+            )
+            if existing.scalar_one_or_none():
+                continue
+
+            # Assign bed for admitted patients
+            bed = None
+            if p_data["status"] == "admitted" and bed_idx < len(dept_beds):
+                bed = dept_beds[bed_idx]
+                bed.status = "occupied"
+                bed_idx += 1
+
+            admit_time = datetime.utcnow() - timedelta(hours=random.randint(1, 48))
+
+            patient = Patient(
+                id=uuid_mod.uuid4(),
+                tenant_id=current_user.tenant_id,
+                patient_id=f"PT-{patient_counter:05d}",
+                name=p_data["name"],
+                age=p_data["age"],
+                date_of_birth=date.today() - timedelta(days=p_data["age"] * 365),
+                gender=p_data["gender"],
+                phone=f"+91-98765{patient_counter:05d}",
+                blood_group=p_data.get("blood_group", "O+"),
+                complaint=p_data["complaint"],
+                status=p_data["status"],
+                priority=p_data["priority"],
+                priority_label=p_data["priority_label"],
+                priority_color="red" if p_data["priority"] == 1 else "orange" if p_data["priority"] == 2 else "yellow" if p_data["priority"] == 3 else "green",
+                department_id=dept.id,
+                bed_id=bed.id if bed else None,
+                assigned_doctor_id=dept_doctors[created % len(dept_doctors)].id if dept_doctors else None,
+                assigned_nurse_id=dept_nurses[created % len(dept_nurses)].id if dept_nurses else None,
+                admitted_at=admit_time,
+            )
+            db.add(patient)
+
+            if bed:
+                bed.current_patient_id = patient.id
+                beds_assigned += 1
+
+            # Add vitals for admitted patients
+            if p_data["status"] == "admitted":
+                vitals = PatientVitals(
+                    id=uuid_mod.uuid4(),
+                    patient_id=patient.id,
+                    heart_rate=70 + random.randint(0, 30),
+                    blood_pressure_systolic=110 + random.randint(0, 40),
+                    blood_pressure_diastolic=70 + random.randint(0, 20),
+                    blood_pressure=f"{110 + random.randint(0, 40)}/{70 + random.randint(0, 20)}",
+                    spo2=95 + random.randint(0, 4),
+                    temperature=round(36.5 + random.randint(0, 20) / 10, 1),
+                    respiratory_rate=14 + random.randint(0, 8),
+                    pain_level=random.randint(1, 8),
+                    source="manual",
+                    is_critical=p_data["priority"] == 1
+                )
+                db.add(vitals)
+
+            created += 1
+            patient_counter += 1
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"Created {created} sample patients ({beds_assigned} with beds assigned) across departments."
     }

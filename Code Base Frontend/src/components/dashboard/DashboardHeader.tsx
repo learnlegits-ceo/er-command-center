@@ -8,11 +8,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useUser } from '@/contexts/UserContext';
 import { useActiveAlerts } from '@/hooks/useAlerts';
+import { useDepartments } from '@/hooks/useDepartments';
+import { useBeds } from '@/hooks/useBeds';
 
 interface DashboardHeaderProps {
   hospitalName?: string;
@@ -29,6 +31,40 @@ export function DashboardHeader({
   const { user, setUser } = useUser();
   const { data: alertsData } = useActiveAlerts();
   const unreadCount = alertsData?.data?.unreadCount || 0;
+  const { data: departments } = useDepartments();
+  const { data: bedsData } = useBeds();
+
+  // Map department code to navigation path
+  const deptCodeToPath: Record<string, string> = {
+    ED: '/emergency/unit-a',
+    ECU: '/emergency/care-unit',
+    TC: '/emergency/trauma',
+    ICU: '/emergency/icu',
+    GW: '/emergency/general-ward',
+    PED: '/emergency/pediatrics',
+    OPD: '/opd/general',
+    CARD: '/opd/cardiology',
+  };
+
+  // Emergency department codes vs OPD/Ward codes
+  const emergencyCodes = new Set(['ED', 'ECU', 'TC', 'ICU']);
+  const opdCodes = new Set(['OPD', 'CARD', 'GW', 'PED']);
+
+  // Calculate bed counts per department from live data
+  const allBeds: any[] = bedsData?.data || [];
+  const bedCountsByDept = useMemo(() => {
+    const counts: Record<string, { total: number; occupied: number }> = {};
+    for (const bed of allBeds) {
+      const dept = bed.department || 'Unknown';
+      if (!counts[dept]) counts[dept] = { total: 0, occupied: 0 };
+      counts[dept].total++;
+      if (bed.status === 'occupied') counts[dept].occupied++;
+    }
+    return counts;
+  }, [allBeds]);
+
+  const emergencyDepts = departments?.filter(d => emergencyCodes.has(d.code)) || [];
+  const opdDepts = departments?.filter(d => opdCodes.has(d.code)) || [];
 
   const userRole = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Guest';
   const userName = user?.name || 'Guest';
@@ -66,71 +102,60 @@ export function DashboardHeader({
                 <div>
                   <DropdownMenuLabel className="text-xs font-semibold text-foreground flex items-center gap-2 py-2">
                     <div className="w-2 h-2 rounded-full bg-primary" />
-                    Apollo Main Campus
+                    Apollo Hospitals
                   </DropdownMenuLabel>
 
-                  <div className="pl-4">
-                    <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider py-1 flex items-center gap-1">
-                      <Activity className="w-3 h-3" />
-                      Emergency Departments
-                    </DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => navigate('/emergency/unit-a')} className="text-sm cursor-pointer flex items-center justify-between">
-                      <span>Emergency Department – Unit A</span>
-                      <span className="text-[10px] text-muted-foreground">8/12 beds</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/emergency/unit-b')} className="text-sm cursor-pointer flex items-center justify-between">
-                      <span>Emergency Department – Unit B</span>
-                      <span className="text-[10px] text-muted-foreground">6/10 beds</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/emergency/trauma')} className="text-sm cursor-pointer flex items-center justify-between">
-                      <span>Trauma Center</span>
-                      <span className="text-[10px] text-muted-foreground">5/8 beds</span>
-                    </DropdownMenuItem>
-                  </div>
+                  {emergencyDepts.length > 0 && (
+                    <div className="pl-4">
+                      <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider py-1 flex items-center gap-1">
+                        <Activity className="w-3 h-3" />
+                        Emergency & Critical Care
+                      </DropdownMenuLabel>
+                      {emergencyDepts.map((dept) => {
+                        const counts = bedCountsByDept[dept.name];
+                        const occupied = counts?.occupied || 0;
+                        const total = counts?.total || 0;
+                        return (
+                          <DropdownMenuItem
+                            key={dept.id}
+                            onClick={() => navigate(deptCodeToPath[dept.code] || '/emergency/unit-a')}
+                            className="text-sm cursor-pointer flex items-center justify-between"
+                          >
+                            <span>{dept.name}</span>
+                            <span className="text-[10px] text-muted-foreground">{occupied}/{total} beds</span>
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                  <div className="pl-4 mt-1">
-                    <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider py-1 flex items-center gap-1">
-                      <Stethoscope className="w-3 h-3" />
-                      Outpatient Departments
-                    </DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => navigate('/opd/general')} className="text-sm cursor-pointer flex items-center justify-between">
-                      <span>General OPD</span>
-                      <span className="text-[10px] text-muted-foreground">3/20 beds</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/opd/cardiology')} className="text-sm cursor-pointer flex items-center justify-between">
-                      <span>Cardiology OPD</span>
-                      <span className="text-[10px] text-muted-foreground">4/8 beds</span>
-                    </DropdownMenuItem>
-                  </div>
+                  {opdDepts.length > 0 && (
+                    <div className="pl-4 mt-1">
+                      <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider py-1 flex items-center gap-1">
+                        <Stethoscope className="w-3 h-3" />
+                        Outpatient & Wards
+                      </DropdownMenuLabel>
+                      {opdDepts.map((dept) => {
+                        const counts = bedCountsByDept[dept.name];
+                        const occupied = counts?.occupied || 0;
+                        const total = counts?.total || 0;
+                        return (
+                          <DropdownMenuItem
+                            key={dept.id}
+                            onClick={() => navigate(deptCodeToPath[dept.code] || '/opd/general')}
+                            className="text-sm cursor-pointer flex items-center justify-between"
+                          >
+                            <span>{dept.name}</span>
+                            <span className="text-[10px] text-muted-foreground">{occupied}/{total} beds</span>
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                  <DropdownMenuSeparator />
-
-                  <DropdownMenuLabel className="text-xs font-semibold text-foreground flex items-center gap-2 py-2">
-                    <div className="w-2 h-2 rounded-full bg-primary" />
-                    Apollo City Center
-                  </DropdownMenuLabel>
-
-                  <div className="pl-4">
-                    <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider py-1 flex items-center gap-1">
-                      <Activity className="w-3 h-3" />
-                      Emergency Departments
-                    </DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => navigate('/emergency/care-unit')} className="text-sm cursor-pointer flex items-center justify-between">
-                      <span>Emergency Care Unit</span>
-                      <span className="text-[10px] text-muted-foreground">3/6 beds</span>
-                    </DropdownMenuItem>
-                  </div>
-
-                  <div className="pl-4 mt-1">
-                    <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider py-1 flex items-center gap-1">
-                      <Stethoscope className="w-3 h-3" />
-                      Outpatient Departments
-                    </DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => navigate('/opd/general')} className="text-sm cursor-pointer flex items-center justify-between">
-                      <span>General OPD</span>
-                      <span className="text-[10px] text-muted-foreground">3/20 beds</span>
-                    </DropdownMenuItem>
-                  </div>
+                  {(!departments || departments.length === 0) && (
+                    <div className="px-4 py-3 text-sm text-muted-foreground">Loading departments...</div>
+                  )}
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>
