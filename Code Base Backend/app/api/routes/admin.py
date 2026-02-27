@@ -357,6 +357,54 @@ async def get_audit_logs(
     }
 
 
+@router.post("/initialize-departments", response_model=dict)
+async def initialize_departments(
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create standard hospital departments. Idempotent — skips departments that already exist."""
+    DEPARTMENTS = [
+        {"name": "Emergency Department", "code": "ED", "floor": "Ground Floor", "capacity": 30},
+        {"name": "Emergency Care Unit", "code": "ECU", "floor": "Ground Floor", "capacity": 15},
+        {"name": "Trauma Center", "code": "TC", "floor": "Ground Floor", "capacity": 20},
+        {"name": "Outpatient Department", "code": "OPD", "floor": "1st Floor", "capacity": 50},
+        {"name": "Intensive Care Unit", "code": "ICU", "floor": "2nd Floor", "capacity": 20},
+        {"name": "General Ward", "code": "GW", "floor": "3rd Floor", "capacity": 60},
+        {"name": "Pediatrics", "code": "PED", "floor": "4th Floor", "capacity": 25},
+        {"name": "Cardiology", "code": "CARD", "floor": "5th Floor", "capacity": 20},
+    ]
+
+    # Get existing department codes for this tenant
+    result = await db.execute(
+        select(Department.code).where(Department.tenant_id == current_user.tenant_id)
+    )
+    existing_codes = {row[0] for row in result.all()}
+
+    created = 0
+    for dept_data in DEPARTMENTS:
+        if dept_data["code"] in existing_codes:
+            continue
+        dept = Department(
+            id=uuid_mod.uuid4(),
+            tenant_id=current_user.tenant_id,
+            name=dept_data["name"],
+            code=dept_data["code"],
+            description=f"{dept_data['name']} - Providing specialized care",
+            floor=dept_data["floor"],
+            capacity=dept_data["capacity"],
+            is_active=True
+        )
+        db.add(dept)
+        created += 1
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"Created {created} new departments. {len(existing_codes)} already existed."
+    }
+
+
 @router.post("/initialize-beds", response_model=dict)
 async def initialize_beds(
     current_user: User = Depends(require_admin),
