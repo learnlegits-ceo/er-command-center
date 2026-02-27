@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Plus, Trash2, Search, Loader2, Printer, Download, CheckCircle2 } from 'lucide-react';
+import { X, Plus, Trash2, Search, Loader2, Printer, Download, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
 import { useCreatePrescription } from '@/hooks/usePatientDetails';
 import { endpoints } from '@/lib/api';
@@ -220,6 +220,9 @@ export function PrescribeModal({ patientName, patientId, open, onOpenChange, onP
   const [showPrescriptionSummary, setShowPrescriptionSummary] = useState(false);
   const [prescribedMeds, setPrescribedMeds] = useState<Medication[]>([]);
   const [prescribedNotes, setPrescribedNotes] = useState('');
+
+  // Drug interaction tracking — store names of added meds for client-side check
+  const [addedMedOptions, setAddedMedOptions] = useState<{name: string; genericName: string}[]>([]);
   const prescriptionRef = useRef<HTMLDivElement>(null);
 
   // Search-engine style medication search state
@@ -419,6 +422,40 @@ export function PrescribeModal({ patientName, patientId, open, onOpenChange, onP
 
   if (!open) return null;
 
+  // ── Drug interaction checker (client-side, keyword-based) ──
+  function checkInteractions(meds: {name: string; genericName: string}[]): string[] {
+    const warnings: string[] = [];
+    const joined = meds.map(m => `${m.name} ${m.genericName}`.toLowerCase()).join(' | ');
+    const has = (keyword: string) => joined.includes(keyword.toLowerCase());
+
+    if (has('warfarin') && (has('aspirin') || has('ibuprofen') || has('diclofenac') || has('naproxen') || has('ketorolac'))) {
+      warnings.push('Warfarin + NSAID/Aspirin: high bleeding risk — monitor INR closely');
+    }
+    if (has('digoxin') && has('amiodarone')) {
+      warnings.push('Digoxin + Amiodarone: digoxin toxicity risk — consider dose reduction');
+    }
+    if ((has('lisinopril') || has('enalapril') || has('ramipril') || has('captopril')) &&
+        (has('spironolactone') || has('eplerenone'))) {
+      warnings.push('ACE inhibitor + K-sparing diuretic: hyperkalemia risk — monitor potassium');
+    }
+    if (has('methotrexate') && (has('ibuprofen') || has('naproxen') || has('diclofenac'))) {
+      warnings.push('Methotrexate + NSAID: methotrexate toxicity risk — avoid combination');
+    }
+    if (has('clopidogrel') && has('omeprazole')) {
+      warnings.push('Clopidogrel + Omeprazole: reduced antiplatelet effect — consider pantoprazole');
+    }
+    if ((has('ciprofloxacin') || has('levofloxacin')) && has('theophylline')) {
+      warnings.push('Fluoroquinolone + Theophylline: theophylline toxicity risk');
+    }
+    // Multiple antibiotics
+    const abxPatterns = ['amoxicillin','ciprofloxacin','azithromycin','metronidazole','doxycycline','cephalexin','clindamycin'];
+    if (abxPatterns.filter(a => has(a)).length >= 2) {
+      warnings.push('Multiple antibiotics: verify indication and check for duplicate therapy');
+    }
+
+    return warnings;
+  }
+
   const handleAddMedication = () => {
     if (!currentMed.name || !currentMed.dosage) return;
 
@@ -428,6 +465,10 @@ export function PrescribeModal({ patientName, patientId, open, onOpenChange, onP
     };
 
     setMedications([...medications, medication]);
+    setAddedMedOptions(prev => [...prev, {
+      name: currentMed.name,
+      genericName: selectedMed?.genericName || ''
+    }]);
     setCurrentMed({
       name: '',
       dosage: '',
@@ -440,6 +481,13 @@ export function PrescribeModal({ patientName, patientId, open, onOpenChange, onP
   };
 
   const handleRemoveMedication = (id: string) => {
+    const med = medications.find(m => m.id === id);
+    if (med) {
+      setAddedMedOptions(prev => {
+        const idx = prev.findIndex(o => o.name === med.name);
+        return idx >= 0 ? [...prev.slice(0, idx), ...prev.slice(idx + 1)] : prev;
+      });
+    }
     setMedications(medications.filter(m => m.id !== id));
   };
 
@@ -475,6 +523,7 @@ export function PrescribeModal({ patientName, patientId, open, onOpenChange, onP
     setPrescribedMeds([]);
     setPrescribedNotes('');
     setMedications([]);
+    setAddedMedOptions([]);
     setNotes('');
     setSearchQuery('');
     setSelectedMed(null);
@@ -840,6 +889,30 @@ export function PrescribeModal({ patientName, patientId, open, onOpenChange, onP
               ))}
             </div>
           )}
+
+          {/* Drug Interaction Warnings */}
+          {addedMedOptions.length >= 2 && (() => {
+            const warnings = checkInteractions(addedMedOptions);
+            return warnings.length > 0 ? (
+              <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className="w-4 h-4 text-yellow-600 flex-shrink-0" />
+                  <span className="text-sm font-semibold text-yellow-800">Drug Interaction Alert</span>
+                </div>
+                <ul className="space-y-1">
+                  {warnings.map((w, i) => (
+                    <li key={i} className="text-xs text-yellow-800 flex items-start gap-1.5">
+                      <span className="mt-0.5">•</span>
+                      <span>{w}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-yellow-700 mt-2 font-medium">
+                  Please verify before prescribing. Clinical judgement applies.
+                </p>
+              </div>
+            ) : null;
+          })()}
 
           {/* Additional Notes */}
           <div>

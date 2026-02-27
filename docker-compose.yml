@@ -1,0 +1,89 @@
+services:
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: er_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-er_command_center}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./Code Base Backend/scripts/database_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks:
+      - er_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: er_redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme_redis_dev}
+    ports:
+      - "127.0.0.1:6379:6379"
+    networks:
+      - er_network
+
+  # ── Backend API (FastAPI) ──────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./Code Base Backend
+      dockerfile: Dockerfile
+    container_name: er_backend
+    env_file:
+      - .env                          # root .env supplies all backend vars
+    environment:
+      # Override DB host to point at the compose postgres service
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-er_command_center}
+      DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-er_command_center}
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./Code Base Backend/app:/app/app
+      - ./Code Base Backend/alembic:/app/alembic
+    networks:
+      - er_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+
+  # ── Frontend (React + Vite dev server) ────────────────────────────────────
+  frontend:
+    build:
+      context: ./Code Base Frontend
+      dockerfile: Dockerfile.dev
+    container_name: er_frontend
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000/api/v1
+      - VITE_APP_NAME=ER Command Center
+      - VITE_ENV=development
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./Code Base Frontend/src:/app/src
+      - ./Code Base Frontend/public:/app/public
+      - ./Code Base Frontend/index.html:/app/index.html
+      - /app/node_modules
+    networks:
+      - er_network
+    depends_on:
+      - backend
+    command: npm run dev -- --host
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  er_network:
+    driver: bridge

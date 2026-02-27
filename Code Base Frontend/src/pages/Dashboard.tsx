@@ -9,6 +9,8 @@ import { AnalyticsCharts } from '@/components/dashboard/AnalyticsCharts'
 import { useDashboardStats, usePatientFlow } from '@/hooks/useDashboard'
 import { usePatients } from '@/hooks/usePatients'
 import { useActiveAlerts } from '@/hooks/useAlerts'
+import { useBeds } from '@/hooks/useBeds'
+import { useUser } from '@/contexts/UserContext'
 import { getDefaultAvatar } from '@/lib/utils'
 
 // Map unit parameter to department name
@@ -24,8 +26,10 @@ const unitToDepartment: Record<string, string> = {
 
 export default function Dashboard() {
   const { unit = 'unit-a' } = useParams()
+  const { user } = useUser()
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
   const [newArrivalOpen, setNewArrivalOpen] = useState(false)
+  const [myPatientsOnly, setMyPatientsOnly] = useState(false)
 
   // Get department name from unit parameter
   const departmentName = unitToDepartment[unit] || 'Emergency Department'
@@ -38,7 +42,14 @@ export default function Dashboard() {
     department: departmentName
   })
   const { data: alerts, isLoading: alertsLoading, error: alertsError } = useActiveAlerts()
-  const { data: patientFlow, isLoading: flowLoading } = usePatientFlow()
+  const { data: patientFlow } = usePatientFlow()
+  const { data: bedsData } = useBeds()
+
+  // Derive real ICU capacity from beds data
+  const allBeds: any[] = bedsData?.data || []
+  const icuBeds = allBeds.filter((b: any) => (b.bedType || b.type)?.toLowerCase() === 'icu')
+  const icuTotal = icuBeds.length
+  const icuOccupied = icuBeds.filter((b: any) => b.status === 'occupied').length
 
   // Transform backend data to component format
   const bedCapacity = stats?.data ? {
@@ -46,9 +57,9 @@ export default function Dashboard() {
     occupied: stats.data.beds?.occupied || 0,
     available: stats.data.beds?.available || 0,
     icu: {
-      total: 6, // Default ICU capacity (TODO: get from backend)
-      occupied: stats.data.patients?.inICU || 0,
-      available: 6 - (stats.data.patients?.inICU || 0)
+      total: icuTotal || stats.data.patients?.inICU || 0,
+      occupied: icuOccupied || stats.data.patients?.inICU || 0,
+      available: Math.max(0, (icuTotal || 0) - (icuOccupied || 0))
     }
   } : {
     total: 0,
@@ -185,6 +196,17 @@ export default function Dashboard() {
       )
     : []
 
+  // Apply My Patients filter — matches on assignedDoctor (doctors) or updatedBy.name (nurses)
+  const displayedPatients = myPatientsOnly && user?.name
+    ? transformedPatients.filter((p: any) => {
+        const userName = user.name.toLowerCase()
+        return (
+          p.assignedDoctor?.toLowerCase().includes(userName) ||
+          p.updatedBy?.name?.toLowerCase().includes(userName)
+        )
+      })
+    : transformedPatients
+
   // Derive selectedPatient from fresh transformed data so vitals stay in sync.
   // Keep a stable snapshot: if the patient disappears from the list (e.g. after discharge),
   // the snapshot keeps the modal alive so the discharge summary can render.
@@ -232,9 +254,23 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* My Patients toggle */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => setMyPatientsOnly((v) => !v)}
+          className={`text-sm px-4 py-1.5 rounded-full border font-medium transition-colors ${
+            myPatientsOnly
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground'
+          }`}
+        >
+          {myPatientsOnly ? 'My Patients' : 'All Patients'}
+        </button>
+      </div>
+
       {/* AI Triage Queue */}
       <TriageQueue
-        patients={transformedPatients}
+        patients={displayedPatients}
         onNewArrival={() => setNewArrivalOpen(true)}
         onPatientClick={(patient) => setSelectedPatientId(patient.id)}
       />

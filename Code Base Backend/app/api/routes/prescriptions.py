@@ -58,14 +58,18 @@ async def get_patient_prescriptions(
     result = await db.execute(query)
     prescriptions = result.scalars().all()
 
+    # Batch-fetch all prescribers in one query (avoids N+1 per prescription)
+    prescriber_ids = {rx.prescribed_by for rx in prescriptions if rx.prescribed_by}
+    prescribers_by_id: dict = {}
+    if prescriber_ids:
+        prescribers_result = await db.execute(
+            select(User).where(User.id.in_(prescriber_ids))
+        )
+        prescribers_by_id = {u.id: u for u in prescribers_result.scalars().all()}
+
     rx_data = []
     for rx in prescriptions:
-        # Get prescriber name
-        prescriber_result = await db.execute(
-            select(User).where(User.id == rx.prescribed_by)
-        )
-        prescriber = prescriber_result.scalar_one_or_none()
-
+        prescriber = prescribers_by_id.get(rx.prescribed_by) if rx.prescribed_by else None
         rx_data.append({
             "id": str(rx.id),
             "medication": rx.medication_name,

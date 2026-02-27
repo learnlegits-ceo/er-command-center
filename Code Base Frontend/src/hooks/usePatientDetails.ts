@@ -295,3 +295,35 @@ export function useCreateNote() {
     },
   })
 }
+
+// ---- Patient Prescriptions ----
+
+export interface PrescriptionRecord {
+  id: string
+  medication: string        // backend key for medication name
+  genericName: string | null
+  dosage: string
+  frequency: string
+  duration: string | null
+  route: string
+  instructions: string | null
+  status: string
+  prescribedBy: string | null   // just the prescriber name
+  prescribedAt: string | null
+  startDate: string | null
+  endDate: string | null
+  drugInteractions: any[] | null
+  contraindications: string[] | null
+}
+
+export function usePatientPrescriptions(patientId: string | null) {
+  return useQuery({
+    queryKey: ['patient-prescriptions', patientId],
+    queryFn: async () => {
+      if (!patientId) return []
+      const response = await endpoints.patients.getPrescriptions(patientId)
+      return (response.data.data?.prescriptions ?? response.data.data ?? []) as PrescriptionRecord[]
+    },
+    enabled: !!patientId,
+  })
+}

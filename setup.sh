@@ -1,86 +1,81 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# ER Command Center — First-time setup
+# Usage: ./setup.sh
+# Works on: Linux, macOS, Windows (Git Bash / WSL)
+set -euo pipefail
 
-echo "========================================"
-echo "ER Command Center - Setup Script"
-echo "========================================"
+BOLD='\033[1m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
+info()  { echo -e "  ${GREEN}[OK]${NC}    $1"; }
+warn()  { echo -e "  ${YELLOW}[WARN]${NC}  $1"; }
+error() { echo -e "  ${RED}[ERROR]${NC} $1"; exit 1; }
+
+echo -e "${BOLD}========================================"
+echo   "  ER Command Center — Setup"
+echo -e "========================================${NC}"
 echo ""
 
-# Check if Docker is running
-if ! docker info > /dev/null 2>&1; then
-    echo "[ERROR] Docker is not running. Please start Docker first."
-    exit 1
-fi
+# ── 1. Docker ────────────────────────────────────────────────
+docker info > /dev/null 2>&1 || error "Docker is not running. Start Docker Desktop first."
+info "Docker is running."
 
-echo "[1/5] Checking environment files..."
-if [ -f "Code Base Backend/.env" ]; then
-    echo "[INFO] Backend .env file found!"
+# ── 2. Environment file ───────────────────────────────────────
+echo "[1/4] Environment file"
+if [ -f ".env" ]; then
+    info "Root .env found."
 else
-    echo "[WARNING] Backend .env file not found. Please create it from .env.example"
-    echo "Copy 'Code Base Backend/.env.example' to 'Code Base Backend/.env'"
-    read -p "Press Enter to continue..."
+    warn ".env not found — copying from .env.example"
+    cp .env.example .env
+    echo ""
+    echo "  ACTION: Open .env and fill in your secrets before continuing."
+    echo "          Required: DATABASE_URL, JWT_SECRET_KEY, SECRET_KEY, GROQ_API_KEY"
+    echo ""
+    read -rp "  Press Enter once .env is ready..."
 fi
 
-if [ -f "Code Base Frontend/.env" ]; then
-    echo "[INFO] Frontend .env file found!"
-else
-    echo "[WARNING] Frontend .env not found. Creating default..."
-    cat > "Code Base Frontend/.env" << EOF
-VITE_API_BASE_URL=http://localhost:8000/api/v1
-VITE_APP_NAME=ER Command Center
-VITE_ENV=development
-EOF
-fi
-
+# ── 3. Docker services ────────────────────────────────────────
 echo ""
-echo "[2/5] Setting up Backend (Docker)..."
-cd "Code Base Backend"
-echo "Starting PostgreSQL, Redis, and Backend API..."
-docker-compose up -d postgres redis
+echo "[2/4] Starting PostgreSQL, Redis, and Backend API"
+docker compose up -d postgres redis
+echo "  Waiting 15 s for the database to initialise..."
+sleep 15
+docker compose up -d backend
+info "Backend services started."
 
-echo "Waiting for database to initialize (20 seconds)..."
-sleep 20
-
-docker-compose up -d backend
-
-echo "Backend services started!"
-cd ..
-
+# ── 4. Frontend dependencies ──────────────────────────────────
 echo ""
-echo "[3/5] Installing Frontend Dependencies..."
+echo "[3/4] Frontend dependencies"
 cd "Code Base Frontend"
 if [ ! -d "node_modules" ]; then
-    echo "Installing npm packages..."
     npm install
 else
-    echo "Dependencies already installed!"
+    info "node_modules already present."
 fi
 cd ..
 
+# ── 5. Frontend dev server ────────────────────────────────────
 echo ""
-echo "[4/5] Starting Frontend Development Server..."
+echo "[4/4] Starting Frontend dev server"
 cd "Code Base Frontend"
 npm run dev &
 FRONTEND_PID=$!
 cd ..
+info "Frontend started (PID $FRONTEND_PID)."
 
+# ── Done ──────────────────────────────────────────────────────
 echo ""
-echo "[5/5] Setup Complete!"
+echo -e "${BOLD}========================================"
+echo   "  All Services Running"
+echo -e "========================================${NC}"
+echo "  Frontend:    http://localhost:3000"
+echo "  Backend API: http://localhost:8000"
+echo "  API Docs:    http://localhost:8000/docs"
 echo ""
+echo "  Demo credentials:"
+echo "    Nurse:  priya@hospital.com  / nurse123"
+echo "    Doctor: ananya@hospital.com / doctor123"
+echo "    Admin:  rajesh@hospital.com / admin123"
+echo ""
+echo "  To stop:"
+echo "    docker compose down        # backend + db"
+echo "    kill $FRONTEND_PID         # frontend"
 echo "========================================"
-echo "Services Running:"
-echo "========================================"
-echo "Backend API: http://localhost:8000"
-echo "API Docs: http://localhost:8000/api/docs"
-echo "Frontend: http://localhost:5173 or http://localhost:3000"
-echo "Database: localhost:5432 (user: postgres, db: demo_health)"
-echo ""
-echo "Demo Credentials:"
-echo "  Nurse:  priya@hospital.com / nurse123"
-echo "  Doctor: ananya@hospital.com / doctor123"
-echo "  Admin:  rajesh@hospital.com / admin123"
-echo ""
-echo "To stop services:"
-echo "  cd 'Code Base Backend' && docker-compose down"
-echo "  kill $FRONTEND_PID  # Stop frontend"
-echo "========================================"
-echo ""

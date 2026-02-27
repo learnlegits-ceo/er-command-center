@@ -16,48 +16,48 @@ help:
 	@echo ""
 
 build:
-	docker-compose build
+	docker compose build
 
 up:
-	docker-compose up -d
+	docker compose up -d
 	@echo ""
 	@echo "Services started!"
 	@echo "API: http://localhost:8000"
 	@echo "Docs: http://localhost:8000/api/docs"
 
 down:
-	docker-compose down
+	docker compose down
 
 restart:
-	docker-compose restart
+	docker compose restart
 
 logs:
-	docker-compose logs -f backend
+	docker compose logs -f backend
 
 logs-all:
-	docker-compose logs -f
+	docker compose logs -f
 
 shell:
-	docker-compose exec backend bash
+	docker compose exec backend bash
 
 db-shell:
-	docker-compose exec postgres psql -U postgres -d er_command_center
+	docker compose exec postgres psql -U postgres -d er_command_center
 
 migrate:
-	docker-compose exec backend alembic upgrade head
+	docker compose exec backend alembic upgrade head
 
 test:
-	docker-compose exec backend pytest -v
+	docker compose exec backend pytest -v
 
 test-cov:
-	docker-compose exec backend pytest --cov=app --cov-report=html
+	docker compose exec backend pytest --cov=app --cov-report=html
 
 clean:
-	docker-compose down -v
+	docker compose down -v
 	@echo "All containers and volumes removed!"
 
 status:
-	docker-compose ps
+	docker compose ps
 
 health:
 	@curl -s http://localhost:8000/health

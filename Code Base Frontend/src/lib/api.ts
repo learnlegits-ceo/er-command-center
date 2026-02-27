@@ -139,9 +139,12 @@ export const endpoints = {
 
   // Authentication
   auth: {
-    login: (credentials: any) => api.post('/auth/login', credentials),
+    login: (credentials: { email: string; password: string }) => api.post('/auth/login', credentials),
     logout: () => api.post('/auth/logout'),
     getCurrentUser: () => api.get('/auth/me'),
+    forgotPassword: (data: { email: string }) => api.post('/auth/forgot-password', data),
+    verifyOTP: (data: { email: string; otp: string }) => api.post('/auth/verify-otp', data),
+    resetPassword: (data: { reset_token: string; new_password: string }) => api.post('/auth/reset-password', data),
   },
 
   // Admin endpoints
@@ -158,9 +161,18 @@ export const endpoints = {
       specialization?: string
       avatar_url?: string
     }) => api.post('/admin/staff', data),
-    updateStaff: (id: string, data: any) => api.put(`/admin/staff/${id}`, data),
+    updateStaff: (id: string, data: {
+      name?: string
+      phone?: string
+      department_id?: string
+      specialization?: string
+      status?: string
+      avatar_url?: string
+    }) => api.put(`/admin/staff/${id}`, data),
     deleteStaff: (id: string) => api.delete(`/admin/staff/${id}`),
     resetPassword: (id: string) => api.post(`/admin/staff/${id}/reset-password`),
+    getAuditLogs: (params?: { limit?: number; offset?: number; action?: string; entity_type?: string }) =>
+      api.get('/admin/audit-logs', { params }),
   },
 }
 

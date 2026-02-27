@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.pool import NullPool
+from sqlalchemy import text
 from typing import AsyncGenerator
 
 from app.core.config import settings
@@ -48,7 +49,8 @@ async def init_db():
 
 
 async def set_tenant_context(session: AsyncSession, tenant_id: str):
-    """Set the tenant context for RLS."""
+    """Set the tenant context for RLS using a parameterised query (prevents SQL injection)."""
     await session.execute(
-        f"SET app.current_tenant_id = '{tenant_id}'"
+        text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+        {"tid": str(tenant_id)}
     )

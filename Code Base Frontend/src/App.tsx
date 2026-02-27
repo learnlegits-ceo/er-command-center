@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
 import { AppProvider } from '@/contexts/AppContext'
 import { useUser } from '@/contexts/UserContext'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import Dashboard from '@/pages/Dashboard'
 import OPD from '@/pages/OPD'
 import Patients from '@/pages/Patients'
@@ -39,6 +40,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <AppProvider>
+      <ErrorBoundary>
       <Routes>
         {/* Auth routes - outside Layout */}
         <Route path="/login" element={<Login />} />
@@ -58,6 +60,7 @@ function App() {
         <Route path="/admin" element={<ProtectedRoute><Layout><Admin /></Layout></ProtectedRoute>} />
         <Route path="*" element={<div className="flex items-center justify-center min-h-screen">404 - Page Not Found</div>} />
       </Routes>
+      </ErrorBoundary>
     </AppProvider>
   )
 }

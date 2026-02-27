@@ -51,15 +51,18 @@ async def get_patient_notes(
     result = await db.execute(query)
     notes = result.scalars().all()
 
-    # Format response
+    # Batch-fetch all note creators in one query (avoids N+1 per note)
+    creator_ids = {note.created_by for note in notes if note.created_by}
+    creators_by_id: dict = {}
+    if creator_ids:
+        creators_result = await db.execute(
+            select(User).where(User.id.in_(creator_ids))
+        )
+        creators_by_id = {u.id: u for u in creators_result.scalars().all()}
+
     notes_data = []
     for note in notes:
-        # Get creator info
-        creator_result = await db.execute(
-            select(User).where(User.id == note.created_by)
-        )
-        creator = creator_result.scalar_one_or_none()
-
+        creator = creators_by_id.get(note.created_by) if note.created_by else None
         notes_data.append({
             "id": str(note.id),
             "type": note.note_type,

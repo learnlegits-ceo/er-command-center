@@ -1,8 +1,13 @@
 """
 Database diagnostic script - checks if everything is set up correctly
+Run from backend root: python scripts/check_db.py
 """
 import asyncio
 import sys
+import os
+
+# Allow imports from backend root (app.*)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 async def check_database():
     print("=" * 60)

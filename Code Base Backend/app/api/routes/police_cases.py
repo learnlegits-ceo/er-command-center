@@ -129,23 +129,24 @@ async def get_police_cases(
     result = await db.execute(query)
     cases = result.scalars().all()
 
+    # Batch-fetch all referenced users in one query (avoids 2 x N+1 per case)
+    all_user_ids = set()
+    for case in cases:
+        if case.reported_by:
+            all_user_ids.add(case.reported_by)
+        if case.police_contacted_by:
+            all_user_ids.add(case.police_contacted_by)
+    users_by_id: dict = {}
+    if all_user_ids:
+        users_result = await db.execute(
+            select(User).where(User.id.in_(all_user_ids))
+        )
+        users_by_id = {u.id: u for u in users_result.scalars().all()}
+
     cases_data = []
     for case in cases:
-        # Get reporter name
-        reporter_result = await db.execute(
-            select(User).where(User.id == case.reported_by)
-        )
-        reporter = reporter_result.scalar_one_or_none()
-
-        contacted_by_result = None
-        if case.police_contacted_by:
-            contacted_by_result = await db.execute(
-                select(User).where(User.id == case.police_contacted_by)
-            )
-            contacted_by = contacted_by_result.scalar_one_or_none()
-        else:
-            contacted_by = None
-
+        reporter = users_by_id.get(case.reported_by) if case.reported_by else None
+        contacted_by = users_by_id.get(case.police_contacted_by) if case.police_contacted_by else None
         cases_data.append({
             "id": str(case.id),
             "caseNumber": case.case_number,

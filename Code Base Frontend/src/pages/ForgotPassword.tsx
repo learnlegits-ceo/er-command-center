@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Building2, Mail, Lock, ArrowLeft, CheckCircle, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { endpoints } from '@/lib/api'
 
 type Step = 'email' | 'verify' | 'reset' | 'success'
 
@@ -10,6 +11,7 @@ export default function ForgotPassword() {
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
+  const [resetToken, setResetToken] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -21,42 +23,46 @@ export default function ForgotPassword() {
     e.preventDefault()
     setError('')
     setIsLoading(true)
-
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    // In real app, validate email exists in database
-    if (email) {
+    try {
+      await endpoints.auth.forgotPassword({ email })
       setStep('verify')
-    } else {
-      setError('Please enter a valid email address')
+    } catch {
+      setError('Could not send verification code. Please check your email address and try again.')
+    } finally {
+      setIsLoading(false)
     }
-    setIsLoading(false)
   }
 
   const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    setIsLoading(true)
-
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500))
-
-    // Demo: accept any 6-digit OTP
-    if (otp.length === 6) {
-      setStep('reset')
-    } else {
+    if (otp.length !== 6) {
       setError('Please enter a valid 6-digit OTP')
+      return
     }
-    setIsLoading(false)
+    setIsLoading(true)
+    try {
+      const res = await endpoints.auth.verifyOTP({ email, otp })
+      setResetToken(res.data?.resetToken || '')
+      setStep('reset')
+    } catch {
+      setError('Invalid or expired verification code. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
-    if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters')
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+
+    if (!/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      setError('Password must contain at least one uppercase letter and one number')
       return
     }
 
@@ -66,12 +72,14 @@ export default function ForgotPassword() {
     }
 
     setIsLoading(true)
-
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500))
-
-    setStep('success')
-    setIsLoading(false)
+    try {
+      await endpoints.auth.resetPassword({ reset_token: resetToken, new_password: newPassword })
+      setStep('success')
+    } catch {
+      setError('Password reset failed. The link may have expired. Please start over.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const renderStep = () => {

@@ -1,20 +1,68 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { PatientCard } from '@/components/PatientCard'
 import { Button } from '@/components/ui/button'
 import { usePatients } from '@/hooks/usePatients'
 import { Plus, Search, Loader2, AlertCircle } from 'lucide-react'
 import { Patient } from '@/data/types'
+import { NewArrivalModal } from '@/components/dashboard/NewArrivalModal'
+import { PatientDetailModal } from '@/components/dashboard/PatientDetailModal'
+
+function transformPatientForModal(patient: any) {
+  const triageLevel = patient.priority && patient.priority >= 1 && patient.priority <= 4
+    ? patient.priority : 0
+  const triageLabelMap: Record<number, string> = {
+    0: 'Pending Triage', 1: 'L1 - Critical', 2: 'L2 - Emergent',
+    3: 'L3 - Urgent', 4: 'L4 - Non-Urgent'
+  }
+  return {
+    id: patient.id,
+    name: patient.name,
+    age: `${patient.age}${patient.gender?.charAt(0)?.toUpperCase() || ''}`,
+    gender: patient.gender,
+    avatar: patient.photo || undefined,
+    assignedDoctor: patient.assignedDoctor || 'Unassigned',
+    uhi: patient.patientId || '',
+    euhi: patient.patientId || '',
+    complaint: patient.complaint || 'No complaint specified',
+    triageLevel,
+    triageLabel: patient.priorityLabel || triageLabelMap[triageLevel] || 'Pending Triage',
+    triageReasoning: patient.triage?.reasoning || null,
+    triageRecommendations: patient.triage?.recommendations || [],
+    triageConfidence: patient.triage?.confidence || null,
+    estimatedWaitTime: patient.triage?.estimatedWaitTime || null,
+    bed: patient.bed,
+    bedId: patient.bedId,
+    phone: patient.phone || '',
+    bloodGroup: patient.bloodGroup || '',
+    arrivedAt: patient.admittedAt
+      ? new Date(patient.admittedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+      : '',
+    status: patient.status,
+  }
+}
 
 export default function Patients() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterPriority, setFilterPriority] = useState<number | 'all'>('all')
+  const [newArrivalOpen, setNewArrivalOpen] = useState(false)
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
+  const patientSnapshotRef = useRef<any>(null)
 
   // Fetch patients from backend API
   // API returns {success: true, data: {patients: [...], pagination: {...}}}
   // Pass status='all' to fetch all patients including pending_triage
   const { data: patientsResponse, isLoading, error } = usePatients({ status: 'all' })
-  const patients = patientsResponse?.data?.patients || []
+  const rawPatients: any[] = patientsResponse?.data?.patients || []
+  const patients = rawPatients as Patient[]
+
+  // Derive selected patient with snapshot fallback (keeps modal alive after discharge)
+  const liveSelectedRaw = selectedPatientId
+    ? rawPatients.find((p: any) => p.id === selectedPatientId) ?? null
+    : null
+  const liveSelectedPatient = liveSelectedRaw ? transformPatientForModal(liveSelectedRaw) : null
+  if (liveSelectedPatient) patientSnapshotRef.current = liveSelectedPatient
+  const modalPatient = liveSelectedPatient || patientSnapshotRef.current
 
   const filteredPatients = patients.filter((patient: Patient) => {
     // Search by name or patient ID
@@ -38,7 +86,7 @@ export default function Patients() {
           <h1 className="text-3xl font-bold">Patients</h1>
           <p className="text-muted-foreground">Manage and monitor all patients in the ER</p>
         </div>
-        <Button>
+        <Button onClick={() => setNewArrivalOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Add Patient
         </Button>
@@ -157,7 +205,7 @@ export default function Patients() {
               <PatientCard
                 key={patient.id}
                 patient={patient}
-                onClick={() => console.log('Patient clicked:', patient.id)}
+                onClick={() => setSelectedPatientId(patient.id)}
               />
             ))}
           </div>
@@ -175,6 +223,24 @@ export default function Patients() {
           )}
         </>
       )}
+      {/* New Arrival Modal */}
+      <NewArrivalModal
+        open={newArrivalOpen}
+        onOpenChange={setNewArrivalOpen}
+        defaultDepartmentName="Emergency Department"
+      />
+
+      {/* Patient Detail Modal */}
+      <PatientDetailModal
+        patient={modalPatient}
+        open={!!modalPatient}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedPatientId(null)
+            patientSnapshotRef.current = null
+          }
+        }}
+      />
     </div>
   )
 }

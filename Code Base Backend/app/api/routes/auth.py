@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -22,40 +22,20 @@ from app.core.security import (
     decode_token, hash_token, generate_otp, generate_reset_token
 )
 from app.core.dependencies import get_current_user
+from app.core.rate_limit import rate_limit_login, rate_limit_forgot_password, rate_limit_verify_otp
 from app.services.email import email_service
 
 router = APIRouter()
 
 
-@router.get("/debug-settings")
-async def debug_settings():
-    """Debug: Show current settings."""
-    from app.core.config import settings
-    return {
-        "database_url": settings.DATABASE_URL[:50] + "...",
-        "debug": settings.DEBUG
-    }
-
-
-@router.get("/test-db")
-async def test_db(db: AsyncSession = Depends(get_db)):
-    """Test database connection."""
-    try:
-        result = await db.execute(select(User).limit(1))
-        user = result.scalar_one_or_none()
-        return {"success": True, "user_found": user is not None, "user_name": user.name if user else None}
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {"success": False, "error": str(e)}
-
-
 @router.post("/login")
 async def login(
+    http_request: Request,
     request: LoginRequest,
     db: AsyncSession = Depends(get_db)
 ):
     """Authenticate user and return JWT token."""
+    rate_limit_login(http_request)
     try:
         print(f"[LOGIN] Attempting login for: {request.email}")
 
@@ -150,11 +130,11 @@ async def login(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[LOGIN] UNEXPECTED ERROR: {str(e)}")
+        print(f"[LOGIN] UNEXPECTED ERROR: {type(e).__name__}: {str(e)}")
         traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Login failed: {str(e)}"
+            detail="An unexpected error occurred. Please try again."
         )
 
 
@@ -179,19 +159,21 @@ async def logout(
         await db.commit()
         return {"success": True, "message": "Logged out successfully"}
     except Exception as e:
-        print(f"[LOGOUT] Error: {str(e)}")
+        print(f"[LOGOUT] Error: {type(e).__name__}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Logout failed: {str(e)}"
+            detail="An unexpected error occurred. Please try again."
         )
 
 
 @router.post("/forgot-password")
 async def forgot_password(
+    http_request: Request,
     request: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db)
 ):
     """Request password reset OTP."""
+    rate_limit_forgot_password(http_request)
     try:
         result = await db.execute(
             select(User).where(
@@ -227,8 +209,8 @@ async def forgot_password(
                 user_name=user.name
             )
         except Exception as e:
-            print(f"[FORGOT-PASSWORD] Email error: {str(e)}")
-            print(f"[FORGOT-PASSWORD] OTP for {request.email}: {otp}")
+            # Log error type only — never log the OTP value
+            print(f"[FORGOT-PASSWORD] Email delivery failed for {user.email}: {type(e).__name__}")
 
         return {
             "success": True,
@@ -236,19 +218,21 @@ async def forgot_password(
             "otpExpiry": otp_expiry.isoformat()
         }
     except Exception as e:
-        print(f"[FORGOT-PASSWORD] Error: {str(e)}")
+        print(f"[FORGOT-PASSWORD] Error: {type(e).__name__}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed: {str(e)}"
+            detail="An unexpected error occurred. Please try again."
         )
 
 
 @router.post("/verify-otp")
 async def verify_otp(
+    http_request: Request,
     request: VerifyOTPRequest,
     db: AsyncSession = Depends(get_db)
 ):
     """Verify OTP for password reset."""
+    rate_limit_verify_otp(http_request)
     try:
         result = await db.execute(
             select(PasswordResetToken).where(
@@ -291,10 +275,10 @@ async def verify_otp(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[VERIFY-OTP] Error: {str(e)}")
+        print(f"[VERIFY-OTP] Error: {type(e).__name__}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed: {str(e)}"
+            detail="An unexpected error occurred. Please try again."
         )
 
 
@@ -341,10 +325,10 @@ async def reset_password(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[RESET-PASSWORD] Error: {str(e)}")
+        print(f"[RESET-PASSWORD] Error: {type(e).__name__}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed: {str(e)}"
+            detail="An unexpected error occurred. Please try again."
         )
 
 
@@ -369,10 +353,10 @@ async def change_password(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[CHANGE-PASSWORD] Error: {str(e)}")
+        print(f"[CHANGE-PASSWORD] Error: {type(e).__name__}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed: {str(e)}"
+            detail="An unexpected error occurred. Please try again."
         )
 
 
@@ -430,10 +414,10 @@ async def refresh_token(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[REFRESH-TOKEN] Error: {str(e)}")
+        print(f"[REFRESH-TOKEN] Error: {type(e).__name__}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed: {str(e)}"
+            detail="An unexpected error occurred. Please try again."
         )
 
 
@@ -468,17 +452,21 @@ async def get_current_user_info(
             }
         }
     except Exception as e:
-        print(f"[ME] Error: {str(e)}")
+        print(f"[ME] Error: {type(e).__name__}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed: {str(e)}"
+            detail="An unexpected error occurred. Please try again."
         )
 
 
 @router.get("/seed-database")
 @router.post("/seed-database")
 async def seed_database(db: AsyncSession = Depends(get_db)):
-    """One-time database seeding. Only works on an empty database."""
+    """One-time database seeding. Only works on an empty database in development."""
+    from app.core.config import settings
+    if settings.APP_ENV != "development":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
     try:
         # Refuse to run if users already exist
         result = await db.execute(select(User).limit(1))
@@ -548,20 +536,15 @@ async def seed_database(db: AsyncSession = Depends(get_db)):
 
         return {
             "success": True,
-            "message": "Database seeded! You can now log in.",
-            "credentials": [
-                {"role": "nurse", "email": "priya@hospital.com", "password": "nurse123"},
-                {"role": "doctor", "email": "ananya@hospital.com", "password": "doctor123"},
-                {"role": "admin", "email": "rajesh@hospital.com", "password": "admin123"},
-            ]
+            "message": "Database seeded successfully. Use the credentials from your project documentation to log in."
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[SEED] Error: {str(e)}")
+        print(f"[SEED] Error: {type(e).__name__}: {str(e)}")
         traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Seeding failed: {str(e)}"
+            detail="An unexpected error occurred. Please try again."
         )

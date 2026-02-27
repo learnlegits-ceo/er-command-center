@@ -1,6 +1,14 @@
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import List
 from functools import lru_cache
+
+_INSECURE_DEFAULTS = {
+    "change-this-in-production",
+    "change-this-jwt-secret",
+    "change-this-secret-key-min-32-chars",
+    "change-this-jwt-secret-key-min-32-chars",
+}
 
 
 class Settings(BaseSettings):
@@ -48,14 +56,31 @@ class Settings(BaseSettings):
     # Redis (optional)
     REDIS_URL: str = ""
 
+    @field_validator("SECRET_KEY", "JWT_SECRET_KEY")
+    @classmethod
+    def must_not_be_default(cls, v: str, info) -> str:
+        """Prevent application startup with insecure placeholder secrets."""
+        if v in _INSECURE_DEFAULTS:
+            raise ValueError(
+                f"{info.field_name} is set to an insecure default. "
+                "Set a strong random value in your .env file before starting the server."
+            )
+        if len(v) < 32:
+            raise ValueError(
+                f"{info.field_name} must be at least 32 characters long."
+            )
+        return v
+
     @property
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
 
     class Config:
-        env_file = ".env"
+        # Looks for .env in repo root first, then falls back to local .env.
+        # This lets a single root .env file drive both backend and frontend.
+        env_file = ("../../.env", "../.env", ".env")
         case_sensitive = True
-        extra = "ignore"  # Allow extra env vars without error
+        extra = "ignore"  # Allow extra env vars (e.g. VITE_*) without error
 
 
 @lru_cache()

@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { X, Activity, ClipboardList, MessageSquare, Camera, User, Bed, Clock, Hash, Plus, FileText, Pill, LogOut as DischargeIcon, Pencil, ArrowRight, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { X, Activity, ClipboardList, MessageSquare, Camera, User, Bed, Clock, Hash, Plus, FileText, Pill, LogOut as DischargeIcon, Pencil, ArrowRight, Sparkles, ChevronDown, ChevronUp, BarChart2, FlaskConical, Users } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
 import { PrescribeModal } from './PrescribeModal';
 import { DischargeModal } from './DischargeModal';
 import { EditPatientModal } from './EditPatientModal';
-import { usePatientVitals, usePatientTriageTimeline, useAddVitals, useRecommendTriageShift, useShiftTriage, useTransferToOPD, usePatientNotes, useCreateNote } from '@/hooks/usePatientDetails';
+import { usePatientVitals, usePatientTriageTimeline, useAddVitals, useRecommendTriageShift, useShiftTriage, useTransferToOPD, usePatientNotes, useCreateNote, usePatientPrescriptions } from '@/hooks/usePatientDetails';
 
 interface VitalRecord {
   id: string;
@@ -121,7 +122,7 @@ function formatRecordedDate(dateStr: string | null | undefined): string {
 
 export function PatientDetailModal({ patient, open, onOpenChange }: PatientDetailModalProps) {
   const { user, canAddNurseNotes, canAddDoctorComments, canDischarge, canPrescribe } = useUser();
-  const [activeTab, setActiveTab] = useState<'vitals' | 'triage' | 'notes' | 'doctor'>('vitals');
+  const [activeTab, setActiveTab] = useState<'vitals' | 'triage' | 'notes' | 'doctor' | 'mar' | 'lab' | 'consult'>('vitals');
 
   // Fetch real vitals and triage data
   const { data: vitalsHistory, isLoading: vitalsLoading } = usePatientVitals(patient?.id || null);
@@ -167,6 +168,9 @@ export function PatientDetailModal({ patient, open, onOpenChange }: PatientDetai
   // Fetch notes from API (nurse and doctor notes are stored in the same table with different types)
   const { data: nurseNotesData, isLoading: nurseNotesLoading } = usePatientNotes(patient?.id || null, 'nurse');
   const { data: doctorNotesData, isLoading: doctorNotesLoading } = usePatientNotes(patient?.id || null, 'doctor');
+  const { data: labOrdersData, isLoading: labOrdersLoading } = usePatientNotes(patient?.id || null, 'lab_order');
+  const { data: consultationsData, isLoading: consultationsLoading } = usePatientNotes(patient?.id || null, 'consultation');
+  const { data: prescriptionsData, isLoading: prescriptionsLoading } = usePatientPrescriptions(patient?.id || null);
   const createNoteMutation = useCreateNote();
 
   // Nurse Notes state
@@ -182,6 +186,17 @@ export function PatientDetailModal({ patient, open, onOpenChange }: PatientDetai
     type: 'General' as DoctorComment['type'],
     comment: ''
   });
+
+  // Lab Orders state
+  const [showAddLabOrder, setShowAddLabOrder] = useState(false);
+  const [newLabOrder, setNewLabOrder] = useState('');
+
+  // Consultations state
+  const [showAddConsultation, setShowAddConsultation] = useState(false);
+  const [newConsultation, setNewConsultation] = useState({ specialty: '', reason: '' });
+
+  // Vitals chart toggle
+  const [showVitalsChart, setShowVitalsChart] = useState(false);
 
   // Action modals state
   const [showPrescribeModal, setShowPrescribeModal] = useState(false);
@@ -302,6 +317,56 @@ export function PatientDetailModal({ patient, open, onOpenChange }: PatientDetai
       console.error('Failed to save doctor comment:', error);
     }
   };
+
+  // Lab Orders handler
+  const handleAddLabOrder = async () => {
+    if (!newLabOrder.trim() || !patient) return;
+    try {
+      await createNoteMutation.mutateAsync({
+        patientId: patient.id,
+        data: { type: 'lab_order', content: newLabOrder }
+      });
+      setNewLabOrder('');
+      setShowAddLabOrder(false);
+    } catch (error) {
+      console.error('Failed to save lab order:', error);
+    }
+  };
+
+  // Consultations handler
+  const handleAddConsultation = async () => {
+    if (!newConsultation.reason.trim() || !patient) return;
+    try {
+      await createNoteMutation.mutateAsync({
+        patientId: patient.id,
+        data: {
+          type: 'consultation',
+          content: newConsultation.specialty
+            ? `[${newConsultation.specialty}] ${newConsultation.reason}`
+            : newConsultation.reason
+        }
+      });
+      setNewConsultation({ specialty: '', reason: '' });
+      setShowAddConsultation(false);
+    } catch (error) {
+      console.error('Failed to save consultation:', error);
+    }
+  };
+
+  // Prepare vitals trend chart data (oldest → newest)
+  const vitalsChartData = (vitalsHistory || [])
+    .slice()
+    .reverse()
+    .map((record) => {
+      const raw = record.recordedAt;
+      const normalized = raw?.includes(' ') && !raw?.includes('T') ? raw.replace(' ', 'T') : raw;
+      const d = new Date(normalized);
+      return {
+        time: !isNaN(d.getTime()) ? d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '',
+        HR: record.hr || null,
+        SpO2: record.spo2 || null,
+      };
+    });
 
   const getCommentTypeColor = (type: string) => {
     switch (type) {
@@ -472,65 +537,71 @@ export function PatientDetailModal({ patient, open, onOpenChange }: PatientDetai
 
         {/* Tabs */}
         <div className="flex border-b bg-muted/30">
-          <button
-            onClick={() => setActiveTab('vitals')}
-            className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
-              activeTab === 'vitals'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Activity className="w-4 h-4" />
-            Vitals History
-          </button>
-          <button
-            onClick={() => setActiveTab('triage')}
-            className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
-              activeTab === 'triage'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <ClipboardList className="w-4 h-4" />
-            Triage Timeline
-          </button>
-          <button
-            onClick={() => setActiveTab('notes')}
-            className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
-              activeTab === 'notes'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4" />
-            Nurse Notes
-          </button>
-          <button
-            onClick={() => setActiveTab('doctor')}
-            className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
-              activeTab === 'doctor'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            Doctor Comments
-          </button>
+          {([
+            { id: 'vitals', icon: <Activity className="w-3.5 h-3.5" />, label: 'Vitals' },
+            { id: 'triage', icon: <ClipboardList className="w-3.5 h-3.5" />, label: 'Triage' },
+            { id: 'notes', icon: <MessageSquare className="w-3.5 h-3.5" />, label: 'Nurse Notes' },
+            { id: 'doctor', icon: <FileText className="w-3.5 h-3.5" />, label: 'Doctor Notes' },
+            { id: 'mar', icon: <Pill className="w-3.5 h-3.5" />, label: 'MAR' },
+            { id: 'lab', icon: <FlaskConical className="w-3.5 h-3.5" />, label: 'Lab Orders' },
+            { id: 'consult', icon: <Users className="w-3.5 h-3.5" />, label: 'Consults' },
+          ] as { id: typeof activeTab; icon: ReactNode; label: string }[]).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs font-medium transition-colors border-b-2 ${
+                activeTab === tab.id
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Tab Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {activeTab === 'vitals' && (
             <div className="space-y-4">
-              {/* Add Vitals Button */}
+              {/* Toolbar: Record Vitals + Chart Toggle */}
               {!showAddVitals && (
-                <button
-                  onClick={() => setShowAddVitals(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                >
-                  <Plus className="w-4 h-4" />
-                  Record Vitals
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowAddVitals(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Record Vitals
+                  </button>
+                  {vitalsChartData.length > 1 && (
+                    <button
+                      onClick={() => setShowVitalsChart((v) => !v)}
+                      className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium hover:bg-muted transition-colors"
+                    >
+                      <BarChart2 className="w-4 h-4" />
+                      {showVitalsChart ? 'Hide Chart' : 'Trend Chart'}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Vitals Trend Chart */}
+              {showVitalsChart && vitalsChartData.length > 1 && (
+                <div className="bg-muted/30 border rounded-lg p-4">
+                  <h4 className="text-sm font-semibold mb-3 text-foreground">HR &amp; SpO₂ Trend</h4>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <LineChart data={vitalsChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} domain={[60, 110]} />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="HR" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} name="HR (bpm)" connectNulls />
+                      <Line type="monotone" dataKey="SpO2" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} name="SpO₂ (%)" connectNulls />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               )}
 
               {/* Add Vitals Form */}
@@ -981,6 +1052,7 @@ export function PatientDetailModal({ patient, open, onOpenChange }: PatientDetai
                         <option value="Intervention">Intervention</option>
                         <option value="Observation">Observation</option>
                         <option value="Communication">Communication</option>
+                        <option value="Handover">Shift Handover</option>
                       </select>
                     </div>
                     <div>
@@ -1049,6 +1121,223 @@ export function PatientDetailModal({ patient, open, onOpenChange }: PatientDetai
                 <p className="text-sm text-muted-foreground text-center py-4">
                   No nurse notes yet.{canAddNurseNotes && ' Click "Add Nurse Note" to create one.'}
                 </p>
+              ) : null}
+            </div>
+          )}
+
+          {/* MAR — Medication Administration Record */}
+          {activeTab === 'mar' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">Active and recent prescriptions for this patient</p>
+                {canPrescribe && (
+                  <button
+                    onClick={() => setShowPrescribeModal(true)}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 text-sm font-medium"
+                  >
+                    <Plus className="w-4 h-4" />
+                    New Prescription
+                  </button>
+                )}
+              </div>
+
+              {prescriptionsLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading prescriptions...</div>
+              ) : prescriptionsData && prescriptionsData.length > 0 ? (
+                <div className="space-y-3">
+                  {(prescriptionsData as any[]).map((rx) => (
+                    <div key={rx.id} className="border rounded-lg p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <p className="font-semibold text-foreground text-sm">{rx.medication || rx.medicationName || '—'}</p>
+                          {rx.genericName && rx.genericName !== rx.medication && (
+                            <p className="text-xs text-muted-foreground">{rx.genericName}</p>
+                          )}
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                          rx.status === 'active' ? 'bg-green-100 text-green-700' :
+                          rx.status === 'stopped' || rx.status === 'discontinued' ? 'bg-red-100 text-red-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {rx.status || 'active'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground mb-2">
+                        <span><span className="font-medium text-foreground">Dose:</span> {rx.dosage || '—'}</span>
+                        <span><span className="font-medium text-foreground">Freq:</span> {rx.frequency || '—'}</span>
+                        <span><span className="font-medium text-foreground">Route:</span> {rx.route || '—'}</span>
+                        {rx.duration && <span><span className="font-medium text-foreground">Duration:</span> {rx.duration}</span>}
+                        {rx.startDate && <span><span className="font-medium text-foreground">Start:</span> {new Date(rx.startDate).toLocaleDateString('en-IN')}</span>}
+                        {rx.endDate && <span><span className="font-medium text-foreground">End:</span> {new Date(rx.endDate).toLocaleDateString('en-IN')}</span>}
+                      </div>
+                      {rx.instructions && (
+                        <p className="text-xs text-muted-foreground mb-2"><span className="font-medium text-foreground">Instructions:</span> {rx.instructions}</p>
+                      )}
+                      {rx.drugInteractions && rx.drugInteractions.length > 0 && (
+                        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                          <span className="font-medium">⚠ Drug Interactions: </span>
+                          {Array.isArray(rx.drugInteractions)
+                            ? rx.drugInteractions.map((d: any) => typeof d === 'string' ? d : d.description || JSON.stringify(d)).join('; ')
+                            : rx.drugInteractions}
+                        </div>
+                      )}
+                      {rx.prescribedBy && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Prescribed by <span className="font-medium text-foreground">{rx.prescribedBy}</span>
+                          {rx.prescribedAt && ` · ${formatRecordedDate(rx.prescribedAt)}`}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">No prescriptions yet.</p>
+              )}
+            </div>
+          )}
+
+          {/* Lab Orders */}
+          {activeTab === 'lab' && (
+            <div className="space-y-3">
+              {canAddNurseNotes && !showAddLabOrder && (
+                <button
+                  onClick={() => setShowAddLabOrder(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Order Lab Test
+                </button>
+              )}
+              {showAddLabOrder && (
+                <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 space-y-3">
+                  <h4 className="text-sm font-semibold text-teal-900">New Lab Order</h4>
+                  <textarea
+                    value={newLabOrder}
+                    onChange={(e) => setNewLabOrder(e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 bg-white border border-teal-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    placeholder="e.g., CBC, LFT, RFT, Blood culture — include urgency and clinical indication"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => { setShowAddLabOrder(false); setNewLabOrder(''); }}
+                      className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAddLabOrder}
+                      disabled={!newLabOrder.trim() || createNoteMutation.isPending}
+                      className="px-4 py-1.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium disabled:opacity-50"
+                    >
+                      {createNoteMutation.isPending ? 'Saving...' : 'Save Order'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {labOrdersLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading lab orders...</div>
+              ) : labOrdersData && labOrdersData.length > 0 ? (
+                labOrdersData.map((order) => (
+                  <div key={order.id} className="bg-muted/30 border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <FlaskConical className="w-4 h-4 text-teal-600" />
+                        <span className="text-sm font-medium">{order.createdBy?.name || 'Staff'}</span>
+                        {order.createdBy?.role && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-100 text-teal-700">{order.createdBy.role}</span>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground">{formatRecordedDate(order.createdAt)}</span>
+                    </div>
+                    <p className="text-sm text-foreground">{order.content}</p>
+                  </div>
+                ))
+              ) : !showAddLabOrder ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No lab orders yet.</p>
+              ) : null}
+            </div>
+          )}
+
+          {/* Consultations */}
+          {activeTab === 'consult' && (
+            <div className="space-y-3">
+              {canAddDoctorComments && !showAddConsultation && (
+                <button
+                  onClick={() => setShowAddConsultation(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Request Consultation
+                </button>
+              )}
+              {showAddConsultation && (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 space-y-3">
+                  <h4 className="text-sm font-semibold text-indigo-900">New Consultation Request</h4>
+                  <div>
+                    <label className="block text-xs text-indigo-700 mb-1">Specialty</label>
+                    <input
+                      type="text"
+                      value={newConsultation.specialty}
+                      onChange={(e) => setNewConsultation({ ...newConsultation, specialty: e.target.value })}
+                      className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="e.g., Cardiology, Neurology, Orthopaedics"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-indigo-700 mb-1">Reason / Clinical Question</label>
+                    <textarea
+                      value={newConsultation.reason}
+                      onChange={(e) => setNewConsultation({ ...newConsultation, reason: e.target.value })}
+                      rows={3}
+                      className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Describe the clinical question or reason for consultation..."
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => { setShowAddConsultation(false); setNewConsultation({ specialty: '', reason: '' }); }}
+                      className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAddConsultation}
+                      disabled={!newConsultation.reason.trim() || createNoteMutation.isPending}
+                      className="px-4 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium disabled:opacity-50"
+                    >
+                      {createNoteMutation.isPending ? 'Saving...' : 'Submit Request'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {consultationsLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading consultations...</div>
+              ) : consultationsData && consultationsData.length > 0 ? (
+                consultationsData.map((consult) => {
+                  const specialtyMatch = consult.content.match(/^\[([^\]]+)\]\s*/);
+                  const specialty = specialtyMatch ? specialtyMatch[1] : null;
+                  const reason = specialtyMatch ? consult.content.slice(specialtyMatch[0].length) : consult.content;
+                  return (
+                    <div key={consult.id} className="bg-muted/30 border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Users className="w-4 h-4 text-indigo-600" />
+                          <span className="text-sm font-medium">{consult.createdBy?.name || 'Doctor'}</span>
+                          {specialty && (
+                            <span className="text-xs px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">{specialty}</span>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground">{formatRecordedDate(consult.createdAt)}</span>
+                      </div>
+                      <p className="text-sm text-foreground">{reason}</p>
+                    </div>
+                  );
+                })
+              ) : !showAddConsultation ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No consultation requests yet.</p>
               ) : null}
             </div>
           )}

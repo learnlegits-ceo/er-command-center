@@ -9,6 +9,7 @@ from typing import Optional
 from app.db.database import get_db
 from app.models.user import User, UserSettings
 from app.models.department import Department
+from app.models.audit import AuditLog
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.schemas.common import SuccessResponse
 from app.core.dependencies import require_admin
@@ -196,10 +197,11 @@ async def update_staff(
             detail="Staff member not found"
         )
 
-    # Update fields
+    # Update only explicitly allowed fields to prevent privilege escalation
+    UPDATABLE_STAFF_FIELDS = {"name", "phone", "department_id", "specialization", "status", "avatar_url"}
     update_data = request.model_dump(exclude_unset=True)
     for field, value in update_data.items():
-        if hasattr(user, field):
+        if field in UPDATABLE_STAFF_FIELDS:
             setattr(user, field, value)
 
     await db.commit()
@@ -290,7 +292,64 @@ async def reset_staff_password(
 
     await db.commit()
 
-    # TODO: Send password reset email via SQS
-    print(f"Temporary password for {user.email}: {temp_password}")
+    # TODO: Send password reset email via SQS/Resend — never log the temporary password
+    print(f"[ADMIN] Password reset for {user.email} — temporary password generated and hashed.")
 
-    return {"success": True, "message": "Password reset email sent to staff member"}
+    return {"success": True, "message": "Password has been reset. Please notify the staff member directly through a secure channel."}
+
+
+@router.get("/audit-logs", response_model=dict)
+async def get_audit_logs(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    action: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get system audit logs for the current tenant."""
+    query = (
+        select(AuditLog, User.name.label("user_name"), User.role.label("user_role"))
+        .outerjoin(User, AuditLog.user_id == User.id)
+        .where(AuditLog.tenant_id == current_user.tenant_id)
+    )
+
+    if action:
+        query = query.where(AuditLog.action.ilike(f"%{action}%"))
+    if entity_type:
+        query = query.where(AuditLog.entity_type == entity_type)
+
+    total_result = await db.execute(
+        select(func.count()).select_from(
+            select(AuditLog).where(AuditLog.tenant_id == current_user.tenant_id).subquery()
+        )
+    )
+    total = total_result.scalar() or 0
+
+    query = query.order_by(AuditLog.created_at.desc()).limit(limit).offset(offset)
+    result = await db.execute(query)
+    rows = result.all()
+
+    logs = []
+    for row in rows:
+        log = row[0]
+        logs.append({
+            "id": str(log.id),
+            "action": log.action,
+            "entityType": log.entity_type,
+            "entityId": str(log.entity_id) if log.entity_id else None,
+            "userName": row[1] or "System",
+            "userRole": row[2] or "system",
+            "ipAddress": str(log.ip_address) if log.ip_address else None,
+            "createdAt": log.created_at,
+        })
+
+    return {
+        "success": True,
+        "data": {
+            "logs": logs,
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        }
+    }

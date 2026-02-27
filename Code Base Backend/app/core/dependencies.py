@@ -6,8 +6,8 @@ from typing import Optional
 from uuid import UUID
 
 from app.db.database import get_db
-from app.core.security import decode_token
-from app.models.user import User
+from app.core.security import decode_token, hash_token
+from app.models.user import User, UserSession
 
 # HTTP Bearer security scheme
 security = HTTPBearer()
@@ -73,6 +73,22 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is not active"
+        )
+
+    # Verify the token has not been revoked via logout
+    token_hash = hash_token(token)
+    session_result = await db.execute(
+        select(UserSession).where(
+            UserSession.user_id == user_uuid,
+            UserSession.token_hash == token_hash,
+            UserSession.is_active == True
+        )
+    )
+    if not session_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has been invalidated. Please log in again.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return user

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { UserPlus, Users, Shield, Stethoscope, Syringe, Edit2, Trash2, Search, Eye, EyeOff, X, Camera, User as UserIcon, Loader2 } from 'lucide-react'
+import { UserPlus, Users, Shield, Stethoscope, Syringe, Edit2, Trash2, Search, Eye, EyeOff, X, Camera, User as UserIcon, Loader2, AlertTriangle, Phone, CheckCircle2, Clock, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useUser, UserRole } from '@/contexts/UserContext'
 import { endpoints } from '@/lib/api'
@@ -56,8 +56,25 @@ const AVATAR_OPTIONS = [
   { id: 'admin-2', url: adminAvatar2, label: 'Admin - Female', category: 'admin' },
 ]
 
+interface PoliceCase {
+  id: string
+  caseNumber: string
+  patientName: string
+  caseType: string
+  status: 'pending' | 'contacted' | 'resolved'
+  description?: string
+  createdAt: string
+  contactedAt?: string
+  resolvedAt?: string
+  firNumber?: string
+  resolution?: string
+}
+
 export default function Admin() {
   const { user, canManageUsers } = useUser()
+  const [activeAdminTab, setActiveAdminTab] = useState<'staff' | 'police' | 'audit'>('staff')
+
+  // Staff state
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
@@ -79,6 +96,18 @@ export default function Admin() {
   const [stats, setStats] = useState({ total: 0, doctors: 0, nurses: 0, admins: 0 })
   const [showAvatarPicker, setShowAvatarPicker] = useState(false)
   const [customAvatarUrl, setCustomAvatarUrl] = useState('')
+
+  // Police cases state
+  const [policeCases, setPoliceCases] = useState<PoliceCase[]>([])
+  const [policeCasesLoading, setPoliceCasesLoading] = useState(false)
+  const [policeFilter, setPoliceFilter] = useState<string>('all')
+  const [contactModal, setContactModal] = useState<PoliceCase | null>(null)
+  const [resolveModal, setResolveModal] = useState<PoliceCase | null>(null)
+  const [contactDetails, setContactDetails] = useState({ officerName: '', badgeNumber: '' })
+  const [resolveDetails, setResolveDetails] = useState({ resolution: '', firNumber: '' })
+  const [policeActionLoading, setPoliceActionLoading] = useState(false)
+  const [policeError, setPoliceError] = useState('')
+  const [policeSuccess, setPoliceSuccess] = useState('')
 
   // Load staff from backend
   const loadStaff = async () => {
@@ -121,6 +150,99 @@ export default function Admin() {
       return () => clearTimeout(timer)
     }
   }, [successMsg])
+
+  // Load police cases when tab switches to police
+  const loadPoliceCases = async () => {
+    setPoliceCasesLoading(true)
+    setPoliceError('')
+    try {
+      const response = await endpoints.policeCases.getAll()
+      const data = response.data?.data
+      setPoliceCases(Array.isArray(data) ? data : [])
+    } catch {
+      setPoliceError('Failed to load police cases.')
+    } finally {
+      setPoliceCasesLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeAdminTab === 'police') loadPoliceCases()
+  }, [activeAdminTab])
+
+  // Audit log state
+  interface AuditEntry { id: string; action: string; entityType: string; entityId: string | null; userName: string; userRole: string; ipAddress: string | null; createdAt: string }
+  const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditTotal, setAuditTotal] = useState(0)
+  const [auditOffset, setAuditOffset] = useState(0)
+  const [auditEntityFilter, setAuditEntityFilter] = useState('')
+  const AUDIT_LIMIT = 50
+
+  const loadAuditLogs = async (offset = 0, entityType = '') => {
+    setAuditLoading(true)
+    try {
+      const response = await endpoints.admin.getAuditLogs({
+        limit: AUDIT_LIMIT,
+        offset,
+        ...(entityType ? { entity_type: entityType } : {})
+      })
+      if (response.data.success) {
+        setAuditLogs(response.data.data.logs)
+        setAuditTotal(response.data.data.total)
+        setAuditOffset(offset)
+      }
+    } catch {
+      // silently fail — audit log is non-critical
+    } finally {
+      setAuditLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeAdminTab === 'audit') loadAuditLogs(0, auditEntityFilter)
+  }, [activeAdminTab])
+
+  useEffect(() => {
+    if (policeSuccess) {
+      const t = setTimeout(() => setPoliceSuccess(''), 4000)
+      return () => clearTimeout(t)
+    }
+  }, [policeSuccess])
+
+  const handleContactPolice = async () => {
+    if (!contactModal) return
+    setPoliceActionLoading(true)
+    setPoliceError('')
+    try {
+      await endpoints.policeCases.contactPolice(contactModal.id, contactDetails)
+      setContactModal(null)
+      setContactDetails({ officerName: '', badgeNumber: '' })
+      setPoliceSuccess('Police contacted successfully.')
+      loadPoliceCases()
+    } catch {
+      setPoliceError('Failed to update case. Please try again.')
+    } finally {
+      setPoliceActionLoading(false)
+    }
+  }
+
+  const handleResolveCase = async () => {
+    if (!resolveModal || !resolveDetails.resolution) return
+    setPoliceActionLoading(true)
+    setPoliceError('')
+    try {
+      await endpoints.policeCases.resolve(resolveModal.id, resolveDetails)
+      setResolveModal(null)
+      setResolveDetails({ resolution: '', firNumber: '' })
+      setPoliceSuccess('Case resolved successfully.')
+      loadPoliceCases()
+    } catch {
+      setPoliceError('Failed to resolve case. Please try again.')
+    } finally {
+      setPoliceActionLoading(false)
+    }
+  }
 
   if (!canManageUsers) {
     return (
@@ -309,6 +431,46 @@ export default function Admin() {
           </button>
         </div>
       )}
+
+      {/* Tab Navigation */}
+      <div className="flex border-b">
+        <button
+          onClick={() => setActiveAdminTab('staff')}
+          className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
+            activeAdminTab === 'staff'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          Staff Management
+        </button>
+        <button
+          onClick={() => setActiveAdminTab('police')}
+          className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
+            activeAdminTab === 'police'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <AlertTriangle className="w-4 h-4" />
+          Police / MLC Cases
+        </button>
+        <button
+          onClick={() => setActiveAdminTab('audit')}
+          className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
+            activeAdminTab === 'audit'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          Audit Log
+        </button>
+      </div>
+
+      {/* ── STAFF TAB ── */}
+      {activeAdminTab === 'staff' && <>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-4 gap-4">
@@ -818,6 +980,350 @@ export default function Admin() {
           </div>
         </div>
       )}
+
+      </> /* end staff tab */}
+
+      {/* ── POLICE CASES TAB ── */}
+      {activeAdminTab === 'police' && (
+        <div className="space-y-6">
+          {/* Police feedback messages */}
+          {policeSuccess && (
+            <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg text-green-700">
+              <span className="text-sm">{policeSuccess}</span>
+              <button onClick={() => setPoliceSuccess('')}><X className="w-4 h-4" /></button>
+            </div>
+          )}
+          {policeError && (
+            <div className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+              <span className="text-sm">{policeError}</span>
+              <button onClick={() => setPoliceError('')}><X className="w-4 h-4" /></button>
+            </div>
+          )}
+
+          {/* Police case stats */}
+          <div className="grid grid-cols-4 gap-4">
+            {[
+              { label: 'Total Cases', value: policeCases.length, color: 'bg-card', icon: <FileText className="w-5 h-5 text-foreground" /> },
+              { label: 'Pending', value: policeCases.filter(c => c.status === 'pending').length, color: 'bg-red-50', icon: <Clock className="w-5 h-5 text-red-600" /> },
+              { label: 'Contacted', value: policeCases.filter(c => c.status === 'contacted').length, color: 'bg-yellow-50', icon: <Phone className="w-5 h-5 text-yellow-600" /> },
+              { label: 'Resolved', value: policeCases.filter(c => c.status === 'resolved').length, color: 'bg-green-50', icon: <CheckCircle2 className="w-5 h-5 text-green-600" /> },
+            ].map(({ label, value, color, icon }) => (
+              <div key={label} className={`${color} border rounded-lg p-4 flex items-center gap-3`}>
+                <div className="p-2 bg-white/60 rounded-lg">{icon}</div>
+                <div>
+                  <p className="text-2xl font-semibold">{value}</p>
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Status filter */}
+          <div className="flex gap-2">
+            {['all', 'pending', 'contacted', 'resolved'].map(s => (
+              <Button key={s} size="sm" variant={policeFilter === s ? 'default' : 'outline'}
+                onClick={() => setPoliceFilter(s)}>
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </Button>
+            ))}
+          </div>
+
+          {/* Cases table */}
+          <div className="bg-card border rounded-lg overflow-hidden">
+            <div className="p-4 border-b">
+              <h2 className="text-lg font-semibold">MLC / Police Cases</h2>
+              <p className="text-xs text-muted-foreground mt-1">Medico-legal cases flagged by nursing staff during patient registration</p>
+            </div>
+
+            {policeCasesLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-muted-foreground">Loading cases...</span>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      {['Case No.', 'Patient', 'Type', 'Status', 'Reported', 'Actions'].map(h => (
+                        <th key={h} className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {policeCases
+                      .filter(c => policeFilter === 'all' || c.status === policeFilter)
+                      .length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                          No police cases found
+                        </td>
+                      </tr>
+                    ) : (
+                      policeCases
+                        .filter(c => policeFilter === 'all' || c.status === policeFilter)
+                        .map(c => (
+                          <tr key={c.id} className="hover:bg-muted/30 transition-colors">
+                            <td className="px-4 py-3">
+                              <span className="text-sm font-mono font-medium text-foreground">{c.caseNumber}</span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-foreground font-medium">{c.patientName}</td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                                {c.caseType?.replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                c.status === 'pending' ? 'bg-red-100 text-red-700' :
+                                c.status === 'contacted' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-green-100 text-green-700'
+                              }`}>
+                                {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-muted-foreground">
+                              {c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex gap-2">
+                                {c.status === 'pending' && (
+                                  <button
+                                    onClick={() => { setContactModal(c); setPoliceError('') }}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 transition-colors"
+                                  >
+                                    <Phone className="w-3 h-3" />
+                                    Contact Police
+                                  </button>
+                                )}
+                                {(c.status === 'pending' || c.status === 'contacted') && (
+                                  <button
+                                    onClick={() => { setResolveModal(c); setPoliceError('') }}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+                                  >
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    Resolve
+                                  </button>
+                                )}
+                                {c.status === 'resolved' && c.firNumber && (
+                                  <span className="text-xs text-muted-foreground">FIR: {c.firNumber}</span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── AUDIT LOG TAB ── */}
+      {activeAdminTab === 'audit' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">System Audit Log</h2>
+              <p className="text-sm text-muted-foreground">Track all actions across the system ({auditTotal} total entries)</p>
+            </div>
+          </div>
+
+          {/* Entity type filter */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-muted-foreground">Filter by type:</span>
+            {['', 'patient', 'user', 'bed', 'prescription', 'police_case'].map((type) => (
+              <button
+                key={type}
+                onClick={() => {
+                  setAuditEntityFilter(type)
+                  loadAuditLogs(0, type)
+                }}
+                className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
+                  auditEntityFilter === type
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background text-muted-foreground border-border hover:border-primary'
+                }`}
+              >
+                {type === '' ? 'All' : type.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+              </button>
+            ))}
+          </div>
+
+          {/* Log table */}
+          {auditLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
+              <span className="text-muted-foreground">Loading audit logs...</span>
+            </div>
+          ) : auditLogs.length > 0 ? (
+            <>
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Time</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">User</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Action</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Entity</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">IP</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {auditLogs.map((log) => {
+                      const d = new Date(log.createdAt)
+                      const timeStr = isNaN(d.getTime()) ? log.createdAt : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                      const isDestructive = /delete|remove|deactivate|reset/i.test(log.action)
+                      return (
+                        <tr key={log.id} className="hover:bg-muted/30">
+                          <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{timeStr}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-foreground">{log.userName}</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                log.userRole === 'doctor' ? 'bg-blue-100 text-blue-700' :
+                                log.userRole === 'nurse' ? 'bg-green-100 text-green-700' :
+                                log.userRole === 'admin' ? 'bg-purple-100 text-purple-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>{log.userRole}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`text-xs font-medium ${isDestructive ? 'text-red-600' : 'text-foreground'}`}>
+                              {log.action}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            <span className="text-muted-foreground capitalize">{log.entityType}</span>
+                            {log.entityId && <span className="ml-1 font-mono text-[10px] text-muted-foreground/60">{log.entityId.slice(0, 8)}…</span>}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">{log.ipAddress || '—'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">
+                  Showing {auditOffset + 1}–{Math.min(auditOffset + AUDIT_LIMIT, auditTotal)} of {auditTotal}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => loadAuditLogs(Math.max(0, auditOffset - AUDIT_LIMIT), auditEntityFilter)}
+                    disabled={auditOffset === 0 || auditLoading}
+                    className="px-3 py-1.5 text-xs border rounded-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => loadAuditLogs(auditOffset + AUDIT_LIMIT, auditEntityFilter)}
+                    disabled={auditOffset + AUDIT_LIMIT >= auditTotal || auditLoading}
+                    className="px-3 py-1.5 text-xs border rounded-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">No audit log entries found.</div>
+          )}
+        </div>
+      )}
+
+      {/* Contact Police Modal */}
+      {contactModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card rounded-lg shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Contact Police</h3>
+              <button onClick={() => setContactModal(null)}><X className="w-5 h-5 text-muted-foreground" /></button>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Case <span className="font-mono font-medium text-foreground">{contactModal.caseNumber}</span> — {contactModal.patientName}
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Officer Name</label>
+                <input
+                  type="text"
+                  value={contactDetails.officerName}
+                  onChange={e => setContactDetails({ ...contactDetails, officerName: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="Officer full name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Badge / ID Number</label>
+                <input
+                  type="text"
+                  value={contactDetails.badgeNumber}
+                  onChange={e => setContactDetails({ ...contactDetails, badgeNumber: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="e.g. KA/1234"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-5">
+              <button onClick={() => setContactModal(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+              <Button onClick={handleContactPolice} disabled={policeActionLoading}>
+                {policeActionLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Phone className="w-4 h-4 mr-2" />}
+                Mark as Contacted
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resolve Case Modal */}
+      {resolveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card rounded-lg shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Resolve Case</h3>
+              <button onClick={() => setResolveModal(null)}><X className="w-5 h-5 text-muted-foreground" /></button>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Case <span className="font-mono font-medium text-foreground">{resolveModal.caseNumber}</span> — {resolveModal.patientName}
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Resolution Notes <span className="text-red-500">*</span></label>
+                <textarea
+                  value={resolveDetails.resolution}
+                  onChange={e => setResolveDetails({ ...resolveDetails, resolution: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                  placeholder="Describe how the case was resolved..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">FIR Number (optional)</label>
+                <input
+                  type="text"
+                  value={resolveDetails.firNumber}
+                  onChange={e => setResolveDetails({ ...resolveDetails, firNumber: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="e.g. FIR/2024/001"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-5">
+              <button onClick={() => setResolveModal(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+              <Button onClick={handleResolveCase} disabled={policeActionLoading || !resolveDetails.resolution}>
+                {policeActionLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                Resolve Case
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
