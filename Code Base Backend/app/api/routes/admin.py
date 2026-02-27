@@ -3,12 +3,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from uuid import UUID
+import uuid as uuid_mod
 from datetime import datetime
 from typing import Optional
 
 from app.db.database import get_db
 from app.models.user import User, UserSettings
 from app.models.department import Department
+from app.models.bed import Bed
 from app.models.audit import AuditLog
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.schemas.common import SuccessResponse
@@ -352,4 +354,71 @@ async def get_audit_logs(
             "limit": limit,
             "offset": offset
         }
+    }
+
+
+@router.post("/initialize-beds", response_model=dict)
+async def initialize_beds(
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create default beds for every department that has none. Idempotent — safe to call multiple times."""
+    # Bed configs per department code
+    BED_CONFIGS = {
+        "ED":   {"count": 15, "types": ["emergency", "trauma", "observation"]},
+        "ECU":  {"count": 8,  "types": ["emergency", "observation", "monitoring"]},
+        "TC":   {"count": 10, "types": ["trauma", "emergency", "observation"]},
+        "OPD":  {"count": 20, "types": ["consultation", "examination", "procedure"]},
+        "ICU":  {"count": 12, "types": ["icu", "isolation", "cardiac"]},
+        "GW":   {"count": 30, "types": ["general", "semi-private", "private"]},
+        "PED":  {"count": 15, "types": ["pediatric", "nicu", "general"]},
+        "CARD": {"count": 12, "types": ["cardiac", "ccu", "monitoring"]},
+    }
+    # Fallback for departments not in the map
+    DEFAULT_CONFIG = {"count": 10, "types": ["general"]}
+
+    # Get all departments for this tenant
+    result = await db.execute(
+        select(Department).where(Department.tenant_id == current_user.tenant_id)
+    )
+    departments = result.scalars().all()
+
+    if not departments:
+        raise HTTPException(status_code=400, detail="No departments found. Create departments first.")
+
+    created = 0
+    skipped = 0
+    for dept in departments:
+        # Check if department already has beds
+        bed_count = await db.execute(
+            select(func.count(Bed.id)).where(
+                Bed.department_id == dept.id,
+                Bed.tenant_id == current_user.tenant_id
+            )
+        )
+        if bed_count.scalar() > 0:
+            skipped += 1
+            continue
+
+        config = BED_CONFIGS.get(dept.code, DEFAULT_CONFIG)
+        for i in range(config["count"]):
+            bed = Bed(
+                id=uuid_mod.uuid4(),
+                tenant_id=current_user.tenant_id,
+                bed_number=f"{dept.code}-{i+1:03d}",
+                department_id=dept.id,
+                bed_type=config["types"][i % len(config["types"])],
+                floor=dept.floor,
+                wing="A" if i < config["count"] // 2 else "B",
+                status="available",
+                is_active=True
+            )
+            db.add(bed)
+            created += 1
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"Created {created} beds across {len(departments) - skipped} departments. {skipped} departments already had beds."
     }
