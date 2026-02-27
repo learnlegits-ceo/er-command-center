@@ -1,6 +1,8 @@
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, Clock, Camera, Bed as BedIcon } from 'lucide-react';
+import { Plus, Clock, Camera, Bed as BedIcon, Loader2 } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
+import { useBeds, useAssignBed } from '@/hooks/useBeds';
 
 interface Patient {
   id: string;
@@ -41,8 +43,55 @@ interface TriageQueueProps {
   onPatientClick: (patient: Patient) => void;
 }
 
+function BedPicker({ patientId, onClose }: { patientId: string; onClose: () => void }) {
+  const { data: bedsData } = useBeds()
+  const assignBed = useAssignBed()
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [onClose])
+
+  const available = (bedsData?.data || []).filter((b: any) => b.status === 'available')
+
+  const handleAssign = async (bedId: string) => {
+    await assignBed.mutateAsync({ bedId, patientId })
+    onClose()
+  }
+
+  return (
+    <div ref={ref} className="absolute z-50 mt-1 w-48 bg-card border rounded-lg shadow-lg py-1 max-h-48 overflow-y-auto">
+      {available.length === 0 ? (
+        <p className="px-3 py-2 text-xs text-muted-foreground">No beds available</p>
+      ) : (
+        available.map((bed: any) => (
+          <button
+            key={bed.id}
+            onClick={(e) => { e.stopPropagation(); handleAssign(bed.id) }}
+            disabled={assignBed.isPending}
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted flex items-center gap-2 disabled:opacity-50"
+          >
+            {assignBed.isPending ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <BedIcon className="w-3 h-3 text-green-600" />
+            )}
+            <span className="font-medium">{bed.bedNumber}</span>
+            <span className="text-muted-foreground capitalize">{bed.bedType || 'general'}</span>
+          </button>
+        ))
+      )}
+    </div>
+  )
+}
+
 export function TriageQueue({ patients, onNewArrival, onPatientClick }: TriageQueueProps) {
   const { canRegisterPatients } = useUser();
+  const [bedPickerFor, setBedPickerFor] = useState<string | null>(null);
 
   const getTriageBadgeColor = (level: number) => {
     switch (level) {
@@ -184,14 +233,24 @@ export function TriageQueue({ patients, onNewArrival, onPatientClick }: TriageQu
                     )}
                   </div>
                 </td>
-                <td className="p-3">
+                <td className="p-3 relative">
                   {patient.bed ? (
                     <div className="flex items-center gap-1">
                       <BedIcon className="w-3 h-3 text-blue-600" />
                       <span className="text-xs font-medium text-foreground">{patient.bed}</span>
                     </div>
                   ) : (
-                    <span className="text-xs text-muted-foreground">Unassigned</span>
+                    <div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setBedPickerFor(bedPickerFor === patient.id ? null : patient.id) }}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                      >
+                        + Assign Bed
+                      </button>
+                      {bedPickerFor === patient.id && (
+                        <BedPicker patientId={patient.id} onClose={() => setBedPickerFor(null)} />
+                      )}
+                    </div>
                   )}
                 </td>
                 <td className="p-3">
