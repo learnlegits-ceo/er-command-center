@@ -18,6 +18,9 @@ export function Layout({ children }: LayoutProps) {
     if (pathname.includes('/emergency/unit-b')) return 'Emergency Department – Unit B'
     if (pathname.includes('/emergency/trauma')) return 'Trauma Center'
     if (pathname.includes('/emergency/care-unit')) return 'Emergency Care Unit'
+    if (pathname.includes('/emergency/icu')) return 'Intensive Care Unit'
+    if (pathname.includes('/emergency/general-ward')) return 'General Ward'
+    if (pathname.includes('/emergency/pediatrics')) return 'Pediatrics'
 
     // OPD departments
     if (pathname.includes('/opd/general')) return 'General OPD'
