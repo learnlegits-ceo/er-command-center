@@ -398,9 +398,9 @@ async def create_patient(
     # Handle doctor assignment
     assigned_doctor_id = request.assigned_doctor_id
 
-    # If department is provided but no doctor, auto-assign an available doctor from that department
+    # If department is provided but no doctor, auto-assign the best-fit doctor
     if request.department_id and not assigned_doctor_id:
-        # Find an active doctor in the department with least patients assigned
+        # 1. Find active doctors in the department
         doctor_query = select(User).where(
             User.tenant_id == current_user.tenant_id,
             User.department_id == request.department_id,
@@ -409,12 +409,58 @@ async def create_patient(
             User.deleted_at.is_(None)
         )
         doctor_result = await db.execute(doctor_query)
-        available_doctors = doctor_result.scalars().all()
+        dept_doctors = doctor_result.scalars().all()
 
-        if available_doctors:
-            # Get patient counts for each doctor to find the one with least workload
-            doctor_workloads = []
-            for doctor in available_doctors:
+        # 2. If no doctors in this department, search all departments for a specialist
+        if not dept_doctors:
+            doctor_query = select(User).where(
+                User.tenant_id == current_user.tenant_id,
+                User.role == "doctor",
+                User.status == "active",
+                User.deleted_at.is_(None)
+            )
+            doctor_result = await db.execute(doctor_query)
+            dept_doctors = doctor_result.scalars().all()
+
+        if dept_doctors:
+            # 3. Score each doctor based on complaint-specialization match
+            complaint_lower = (request.complaint or "").lower()
+
+            # Keyword → specialization mapping for complaint-based matching
+            SPEC_KEYWORDS = {
+                "cardiology": ["chest pain", "heart", "cardiac", "palpitation", "arrhythmia", "hypertension", "bp", "blood pressure", "coronary", "angina", "atrial"],
+                "pulmonology": ["breathing", "respiratory", "asthma", "copd", "pneumonia", "cough", "lung", "dyspnea", "oxygen", "spo2"],
+                "neurology": ["stroke", "seizure", "headache", "weakness", "numbness", "slurred speech", "paralysis", "neurological", "brain", "dizziness"],
+                "orthopedics": ["fracture", "bone", "joint", "dislocation", "sprain", "musculoskeletal", "back pain", "spine"],
+                "trauma": ["accident", "injury", "trauma", "fall", "crush", "wound", "laceration", "burn", "bleeding"],
+                "gastroenterology": ["abdominal", "vomiting", "diarrhea", "gastric", "liver", "hepatitis", "ulcer", "bowel", "nausea"],
+                "pediatrics": ["child", "infant", "pediatric", "neonatal", "baby"],
+                "general medicine": ["fever", "infection", "diabetes", "general", "checkup", "follow-up", "flu", "viral"],
+                "surgery": ["surgery", "surgical", "appendectomy", "bypass", "post-op", "operative"],
+                "emergency medicine": ["emergency", "critical", "sepsis", "multi-organ", "anaphylaxis", "allergic reaction", "poisoning", "overdose"],
+            }
+
+            def specialization_score(doctor, complaint: str) -> int:
+                """Score how well a doctor's specialization matches the complaint. Higher = better match."""
+                spec = (doctor.specialization or "").lower()
+                if not spec:
+                    return 0
+                # Direct specialization keyword match
+                for spec_key, keywords in SPEC_KEYWORDS.items():
+                    if spec_key in spec:
+                        for kw in keywords:
+                            if kw in complaint:
+                                return 10  # Strong match
+                # Partial name match (e.g. doctor specialization contains complaint word)
+                complaint_words = [w for w in complaint.split() if len(w) > 3]
+                for word in complaint_words:
+                    if word in spec:
+                        return 5  # Moderate match
+                return 0
+
+            # 4. Get workloads and compute composite score (specialization match + low workload)
+            doctor_scores = []
+            for doctor in dept_doctors:
                 count_result = await db.execute(
                     select(func.count(Patient.id)).where(
                         Patient.assigned_doctor_id == doctor.id,
@@ -423,11 +469,13 @@ async def create_patient(
                     )
                 )
                 patient_count = count_result.scalar() or 0
-                doctor_workloads.append((doctor.id, patient_count))
+                match_score = specialization_score(doctor, complaint_lower)
+                # Composite: prioritize specialization match, then least workload
+                doctor_scores.append((doctor.id, match_score, patient_count))
 
-            # Sort by workload and pick the doctor with least patients
-            doctor_workloads.sort(key=lambda x: x[1])
-            assigned_doctor_id = doctor_workloads[0][0]
+            # Sort: highest match score first, then lowest workload
+            doctor_scores.sort(key=lambda x: (-x[1], x[2]))
+            assigned_doctor_id = doctor_scores[0][0]
 
     # Create patient
     patient = Patient(
