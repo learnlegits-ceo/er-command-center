@@ -135,7 +135,7 @@ async def get_patients(
     priority: Optional[int] = None,
     search: Optional[str] = None,
     page: int = 1,
-    limit: int = 20,
+    limit: int = 100,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
