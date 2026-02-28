@@ -8,7 +8,8 @@ export function useDashboardStats() {
       const response = await endpoints.dashboard.getStats()
       return response.data
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
   })
 }
 

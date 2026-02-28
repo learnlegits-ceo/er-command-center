@@ -8,7 +8,8 @@ export function useBeds(params?: { department?: string }) {
       const response = await endpoints.beds.getAll(params)
       return response.data
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 10000, // Refetch every 10 seconds for cross-device sync
+    refetchOnWindowFocus: true,
   })
 }
 

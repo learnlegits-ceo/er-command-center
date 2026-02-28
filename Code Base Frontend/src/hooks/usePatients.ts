@@ -9,9 +9,9 @@ export function usePatients(params?: { status?: string; department?: string }) {
       const response = await endpoints.patients.getAll(params)
       return response.data
     },
-    staleTime: 0, // Always consider data stale so refetch triggers immediately
-    refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
-    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    staleTime: 0,
+    refetchInterval: 10000, // Refetch every 10 seconds for cross-device sync
+    refetchOnWindowFocus: true,
   })
 }
 

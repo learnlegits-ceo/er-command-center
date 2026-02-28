@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
 import { AppProvider } from '@/contexts/AppContext'
 import { useUser } from '@/contexts/UserContext'
@@ -14,6 +14,16 @@ import Alerts from '@/pages/Alerts'
 import Profile from '@/pages/Profile'
 import Settings from '@/pages/Settings'
 import './App.css'
+
+// Wrappers that key by route param to force full remount on department change
+function DashboardWrapper() {
+  const { unit = 'unit-a' } = useParams()
+  return <Dashboard key={unit} />
+}
+function OPDWrapper() {
+  const { specialty = 'general' } = useParams()
+  return <OPD key={specialty} />
+}
 
 // Route guard: redirects to login if not authenticated
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -49,8 +59,8 @@ function App() {
         {/* App routes - protected and inside Layout */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/dashboard" element={<ProtectedRoute><Layout><Navigate to="/emergency/unit-a" replace /></Layout></ProtectedRoute>} />
-        <Route path="/emergency/:unit" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
-        <Route path="/opd/:specialty" element={<ProtectedRoute><Layout><OPD /></Layout></ProtectedRoute>} />
+        <Route path="/emergency/:unit" element={<ProtectedRoute><Layout><DashboardWrapper /></Layout></ProtectedRoute>} />
+        <Route path="/opd/:specialty" element={<ProtectedRoute><Layout><OPDWrapper /></Layout></ProtectedRoute>} />
         <Route path="/patients" element={<ProtectedRoute><Layout><Patients /></Layout></ProtectedRoute>} />
         <Route path="/beds" element={<ProtectedRoute><Layout><Beds /></Layout></ProtectedRoute>} />
         <Route path="/alerts" element={<ProtectedRoute><Layout><Alerts /></Layout></ProtectedRoute>} />
