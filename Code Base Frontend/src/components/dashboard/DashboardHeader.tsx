@@ -91,8 +91,8 @@ export function DashboardHeader({
                       Emergency Departments
                     </DropdownMenuLabel>
                     {[
-                      { display: 'Emergency Department – Unit A', path: '/emergency/unit-a', bedDept: 'Emergency Department' },
-                      { display: 'Emergency Department – Unit B', path: '/emergency/unit-b', bedDept: 'Emergency Department' },
+                      { display: 'Emergency Department – Unit A', path: '/emergency/unit-a', bedDept: 'Emergency Department - Unit A' },
+                      { display: 'Emergency Department – Unit B', path: '/emergency/unit-b', bedDept: 'Emergency Department - Unit B' },
                       { display: 'Trauma Center', path: '/emergency/trauma', bedDept: 'Trauma Center' },
                       { display: 'Intensive Care Unit', path: '/emergency/icu', bedDept: 'Intensive Care Unit' },
                     ].map((item) => {

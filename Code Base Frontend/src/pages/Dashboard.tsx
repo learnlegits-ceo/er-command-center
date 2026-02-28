@@ -15,8 +15,8 @@ import { getDefaultAvatar } from '@/lib/utils'
 
 // Map unit parameter to department name
 const unitToDepartment: Record<string, string> = {
-  'unit-a': 'Emergency Department',
-  'unit-b': 'Emergency Department',
+  'unit-a': 'Emergency Department - Unit A',
+  'unit-b': 'Emergency Department - Unit B',
   'care-unit': 'Emergency Care Unit',
   'trauma': 'Trauma Center',
   'icu': 'Intensive Care Unit',

@@ -366,7 +366,8 @@ async def initialize_departments(
 ):
     """Create standard hospital departments. Idempotent — skips departments that already exist."""
     DEPARTMENTS = [
-        {"name": "Emergency Department", "code": "ED", "floor": "Ground Floor", "capacity": 30},
+        {"name": "Emergency Department - Unit A", "code": "ED-A", "floor": "Ground Floor", "capacity": 15},
+        {"name": "Emergency Department - Unit B", "code": "ED-B", "floor": "Ground Floor", "capacity": 15},
         {"name": "Emergency Care Unit", "code": "ECU", "floor": "Ground Floor", "capacity": 15},
         {"name": "Trauma Center", "code": "TC", "floor": "Ground Floor", "capacity": 20},
         {"name": "Outpatient Department", "code": "OPD", "floor": "1st Floor", "capacity": 50},
@@ -415,7 +416,8 @@ async def initialize_beds(
     """Create default beds for every department that has none. Idempotent — safe to call multiple times."""
     # Bed configs per department code
     BED_CONFIGS = {
-        "ED":   {"count": 15, "types": ["emergency", "trauma", "observation"]},
+        "ED-A": {"count": 15, "types": ["emergency", "trauma", "observation"]},
+        "ED-B": {"count": 15, "types": ["emergency", "trauma", "observation"]},
         "ECU":  {"count": 8,  "types": ["emergency", "observation", "monitoring"]},
         "TC":   {"count": 10, "types": ["trauma", "emergency", "observation"]},
         "OPD":  {"count": 20, "types": ["consultation", "examination", "procedure"]},
@@ -539,12 +541,15 @@ async def seed_patients(
 
     # Sample patient data per department code
     PATIENT_DATA = {
-        "ED": [
+        "ED-A": [
             {"name": "John Smith", "age": 45, "gender": "M", "complaint": "Severe chest pain radiating to left arm", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "A+"},
             {"name": "Maria Garcia", "age": 32, "gender": "F", "complaint": "High fever with severe headache and stiff neck", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "O+"},
             {"name": "Robert Johnson", "age": 58, "gender": "M", "complaint": "Difficulty breathing, history of COPD", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "B+"},
+        ],
+        "ED-B": [
             {"name": "Emily Brown", "age": 28, "gender": "F", "complaint": "Severe abdominal pain, vomiting blood", "priority": 2, "priority_label": "L2 - Emergent", "status": "pending_triage", "blood_group": "AB+"},
             {"name": "David Wilson", "age": 67, "gender": "M", "complaint": "Sudden weakness on right side, slurred speech", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "O-"},
+            {"name": "Linda Martinez", "age": 41, "gender": "F", "complaint": "Allergic reaction with swelling and difficulty breathing", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "A+"},
         ],
         "ECU": [
             {"name": "Sunita Devi", "age": 55, "gender": "F", "complaint": "Sudden weakness, dizziness, near-syncope", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "A+"},
@@ -674,4 +679,104 @@ async def seed_patients(
     return {
         "success": True,
         "message": f"Created {created} sample patients ({beds_assigned} with beds assigned) across departments."
+    }
+
+
+@router.post("/split-emergency-department", response_model=dict)
+async def split_emergency_department(
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Migrate existing 'Emergency Department' (ED) into Unit A and Unit B.
+    - Renames existing ED → 'Emergency Department - Unit A' (ED-A)
+    - Creates new 'Emergency Department - Unit B' (ED-B)
+    - Moves half the beds and patients from Unit A to Unit B
+    Idempotent — safe to call multiple times."""
+
+    # Check if already split
+    result = await db.execute(
+        select(Department).where(
+            Department.tenant_id == current_user.tenant_id,
+            Department.code == "ED-A"
+        )
+    )
+    if result.scalar_one_or_none():
+        return {"success": True, "message": "Already split. ED-A and ED-B exist."}
+
+    # Find existing ED department
+    result = await db.execute(
+        select(Department).where(
+            Department.tenant_id == current_user.tenant_id,
+            Department.code == "ED"
+        )
+    )
+    old_ed = result.scalar_one_or_none()
+
+    if not old_ed:
+        return {"success": True, "message": "No 'ED' department found. Use initialize-departments to create ED-A and ED-B."}
+
+    # Rename existing ED → Unit A
+    old_ed.name = "Emergency Department - Unit A"
+    old_ed.code = "ED-A"
+    old_ed.capacity = 15
+
+    # Create Unit B
+    unit_b = Department(
+        id=uuid_mod.uuid4(),
+        tenant_id=current_user.tenant_id,
+        name="Emergency Department - Unit B",
+        code="ED-B",
+        description="Emergency Department - Unit B - Providing specialized care",
+        floor="Ground Floor",
+        capacity=15,
+        is_active=True
+    )
+    db.add(unit_b)
+    await db.flush()
+
+    # Move half the beds from Unit A to Unit B
+    beds_result = await db.execute(
+        select(Bed).where(
+            Bed.department_id == old_ed.id,
+            Bed.tenant_id == current_user.tenant_id
+        ).order_by(Bed.bed_number)
+    )
+    all_ed_beds = beds_result.scalars().all()
+    half = len(all_ed_beds) // 2
+    moved_beds = 0
+    moved_patients = 0
+
+    for i, bed in enumerate(all_ed_beds):
+        if i >= half:
+            bed.department_id = unit_b.id
+            # Rename bed number to ED-B prefix
+            old_num = bed.bed_number.split("-")[-1] if "-" in bed.bed_number else f"{i+1:03d}"
+            bed.bed_number = f"ED-B-{old_num}"
+            moved_beds += 1
+        else:
+            # Rename remaining beds to ED-A prefix
+            old_num = bed.bed_number.split("-")[-1] if "-" in bed.bed_number else f"{i+1:03d}"
+            bed.bed_number = f"ED-A-{old_num}"
+
+    # Move half the patients from Unit A to Unit B
+    patients_result = await db.execute(
+        select(Patient).where(
+            Patient.department_id == old_ed.id,
+            Patient.tenant_id == current_user.tenant_id,
+            Patient.deleted_at.is_(None)
+        ).order_by(Patient.admitted_at)
+    )
+    all_ed_patients = patients_result.scalars().all()
+    p_half = len(all_ed_patients) // 2
+
+    for i, patient in enumerate(all_ed_patients):
+        if i >= p_half:
+            patient.department_id = unit_b.id
+            moved_patients += 1
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"Split complete. Renamed ED → ED-A. Created ED-B. Moved {moved_beds} beds and {moved_patients} patients to Unit B."
     }
