@@ -213,6 +213,7 @@ export function useCreatePrescription() {
     onSuccess: async (_, variables) => {
       // Prescription triggers re-triage on backend, so refresh all relevant data
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['patient-prescriptions', variables.patientId] }),
         queryClient.invalidateQueries({ queryKey: ['patient-triage-timeline', variables.patientId] }),
         queryClient.invalidateQueries({ queryKey: ['patients'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
