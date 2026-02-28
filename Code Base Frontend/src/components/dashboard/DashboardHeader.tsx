@@ -13,7 +13,6 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useUser } from '@/contexts/UserContext';
 import { useActiveAlerts } from '@/hooks/useAlerts';
-import { useDepartments } from '@/hooks/useDepartments';
 import { useBeds } from '@/hooks/useBeds';
 
 interface DashboardHeaderProps {
@@ -31,24 +30,7 @@ export function DashboardHeader({
   const { user, setUser } = useUser();
   const { data: alertsData } = useActiveAlerts();
   const unreadCount = alertsData?.data?.unreadCount || 0;
-  const { data: departments } = useDepartments();
   const { data: bedsData } = useBeds();
-
-  // Map department code to navigation path
-  const deptCodeToPath: Record<string, string> = {
-    ED: '/emergency/unit-a',
-    ECU: '/emergency/care-unit',
-    TC: '/emergency/trauma',
-    ICU: '/emergency/icu',
-    GW: '/emergency/general-ward',
-    PED: '/emergency/pediatrics',
-    OPD: '/opd/general',
-    CARD: '/opd/cardiology',
-  };
-
-  // Emergency department codes vs OPD/Ward codes
-  const emergencyCodes = new Set(['ED', 'ECU', 'TC', 'ICU']);
-  const opdCodes = new Set(['OPD', 'CARD', 'GW', 'PED']);
 
   // Calculate bed counts per department from live data
   const allBeds: any[] = bedsData?.data || [];
@@ -62,9 +44,6 @@ export function DashboardHeader({
     }
     return counts;
   }, [allBeds]);
-
-  const emergencyDepts = departments?.filter(d => emergencyCodes.has(d.code)) || [];
-  const opdDepts = departments?.filter(d => opdCodes.has(d.code)) || [];
 
   const userRole = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Guest';
   const userName = user?.name || 'Guest';
@@ -100,62 +79,105 @@ export function DashboardHeader({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-80 bg-popover border border-border shadow-lg z-50">
                 <div>
+                  {/* Apollo Main Campus */}
                   <DropdownMenuLabel className="text-xs font-semibold text-foreground flex items-center gap-2 py-2">
                     <div className="w-2 h-2 rounded-full bg-primary" />
-                    Apollo Hospitals
+                    Apollo Main Campus
                   </DropdownMenuLabel>
 
-                  {emergencyDepts.length > 0 && (
-                    <div className="pl-4">
-                      <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider py-1 flex items-center gap-1">
-                        <Activity className="w-3 h-3" />
-                        Emergency & Critical Care
-                      </DropdownMenuLabel>
-                      {emergencyDepts.map((dept) => {
-                        const counts = bedCountsByDept[dept.name];
-                        const occupied = counts?.occupied || 0;
-                        const total = counts?.total || 0;
-                        return (
-                          <DropdownMenuItem
-                            key={dept.id}
-                            onClick={() => navigate(deptCodeToPath[dept.code] || '/emergency/unit-a')}
-                            className="text-sm cursor-pointer flex items-center justify-between"
-                          >
-                            <span>{dept.name}</span>
-                            <span className="text-[10px] text-muted-foreground">{occupied}/{total} beds</span>
-                          </DropdownMenuItem>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <div className="pl-4">
+                    <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider py-1 flex items-center gap-1">
+                      <Activity className="w-3 h-3" />
+                      Emergency Departments
+                    </DropdownMenuLabel>
+                    {[
+                      { display: 'Emergency Department – Unit A', path: '/emergency/unit-a', bedDept: 'Emergency Department' },
+                      { display: 'Emergency Department – Unit B', path: '/emergency/unit-b', bedDept: 'Emergency Department' },
+                      { display: 'Trauma Center', path: '/emergency/trauma', bedDept: 'Trauma Center' },
+                      { display: 'Intensive Care Unit', path: '/emergency/icu', bedDept: 'Intensive Care Unit' },
+                    ].map((item) => {
+                      const counts = bedCountsByDept[item.bedDept];
+                      return (
+                        <DropdownMenuItem
+                          key={item.path}
+                          onClick={() => navigate(item.path)}
+                          className="text-sm cursor-pointer flex items-center justify-between"
+                        >
+                          <span>{item.display}</span>
+                          {counts && <span className="text-[10px] text-muted-foreground">{counts.occupied}/{counts.total} beds</span>}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </div>
 
-                  {opdDepts.length > 0 && (
-                    <div className="pl-4 mt-1">
-                      <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider py-1 flex items-center gap-1">
-                        <Stethoscope className="w-3 h-3" />
-                        Outpatient & Wards
-                      </DropdownMenuLabel>
-                      {opdDepts.map((dept) => {
-                        const counts = bedCountsByDept[dept.name];
-                        const occupied = counts?.occupied || 0;
-                        const total = counts?.total || 0;
-                        return (
-                          <DropdownMenuItem
-                            key={dept.id}
-                            onClick={() => navigate(deptCodeToPath[dept.code] || '/opd/general')}
-                            className="text-sm cursor-pointer flex items-center justify-between"
-                          >
-                            <span>{dept.name}</span>
-                            <span className="text-[10px] text-muted-foreground">{occupied}/{total} beds</span>
-                          </DropdownMenuItem>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <div className="pl-4 mt-1">
+                    <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider py-1 flex items-center gap-1">
+                      <Stethoscope className="w-3 h-3" />
+                      Outpatient & Wards
+                    </DropdownMenuLabel>
+                    {[
+                      { display: 'General OPD', path: '/opd/general', bedDept: 'Outpatient Department' },
+                      { display: 'Cardiology OPD', path: '/opd/cardiology', bedDept: 'Cardiology' },
+                      { display: 'General Ward', path: '/emergency/general-ward', bedDept: 'General Ward' },
+                      { display: 'Pediatrics', path: '/emergency/pediatrics', bedDept: 'Pediatrics' },
+                    ].map((item) => {
+                      const counts = bedCountsByDept[item.bedDept];
+                      return (
+                        <DropdownMenuItem
+                          key={item.path}
+                          onClick={() => navigate(item.path)}
+                          className="text-sm cursor-pointer flex items-center justify-between"
+                        >
+                          <span>{item.display}</span>
+                          {counts && <span className="text-[10px] text-muted-foreground">{counts.occupied}/{counts.total} beds</span>}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </div>
 
-                  {(!departments || departments.length === 0) && (
-                    <div className="px-4 py-3 text-sm text-muted-foreground">Loading departments...</div>
-                  )}
+                  <DropdownMenuSeparator />
+
+                  {/* Apollo City Center */}
+                  <DropdownMenuLabel className="text-xs font-semibold text-foreground flex items-center gap-2 py-2">
+                    <div className="w-2 h-2 rounded-full bg-green-500" />
+                    Apollo City Center
+                  </DropdownMenuLabel>
+
+                  <div className="pl-4">
+                    <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider py-1 flex items-center gap-1">
+                      <Activity className="w-3 h-3" />
+                      Emergency Departments
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onClick={() => navigate('/emergency/care-unit')}
+                      className="text-sm cursor-pointer flex items-center justify-between"
+                    >
+                      <span>Emergency Care Unit</span>
+                      {bedCountsByDept['Emergency Care Unit'] && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {bedCountsByDept['Emergency Care Unit'].occupied}/{bedCountsByDept['Emergency Care Unit'].total} beds
+                        </span>
+                      )}
+                    </DropdownMenuItem>
+                  </div>
+
+                  <div className="pl-4 mt-1">
+                    <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider py-1 flex items-center gap-1">
+                      <Stethoscope className="w-3 h-3" />
+                      Outpatient Departments
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onClick={() => navigate('/opd/general')}
+                      className="text-sm cursor-pointer flex items-center justify-between"
+                    >
+                      <span>General OPD</span>
+                      {bedCountsByDept['Outpatient Department'] && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {bedCountsByDept['Outpatient Department'].occupied}/{bedCountsByDept['Outpatient Department'].total} beds
+                        </span>
+                      )}
+                    </DropdownMenuItem>
+                  </div>
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>

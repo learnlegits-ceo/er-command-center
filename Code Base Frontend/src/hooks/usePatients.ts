@@ -35,10 +35,11 @@ export function useCreatePatient() {
       return response.data
     },
     onSuccess: () => {
-      // Invalidate patients list to refresh immediately
+      // Invalidate patients list to refresh immediately across all departments
       queryClient.invalidateQueries({ queryKey: ['patients'] })
-      // Also invalidate dashboard stats to update patient counts
+      // Also invalidate dashboard stats and beds (auto-assign changes bed status)
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['beds'] })
     },
   })
 }
