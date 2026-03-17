@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, Clock, Camera, Bed as BedIcon } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
+import { useDepartmentBeds } from '@/hooks/useDepartments';
+import { useAssignBed } from '@/hooks/useBeds';
 
 interface Patient {
   id: string;
@@ -25,6 +28,7 @@ interface Patient {
   triageReasoning?: string;
   triageRecommendations?: string[];
   bed?: string;
+  bedId?: string;
   updatedBy: {
     name: string;
     role?: string;
@@ -37,12 +41,17 @@ interface Patient {
 
 interface TriageQueueProps {
   patients: Patient[];
+  departmentId?: string | null;
   onNewArrival: () => void;
   onPatientClick: (patient: Patient) => void;
 }
 
-export function TriageQueue({ patients, onNewArrival, onPatientClick }: TriageQueueProps) {
+export function TriageQueue({ patients, departmentId, onNewArrival, onPatientClick }: TriageQueueProps) {
   const { canRegisterPatients } = useUser();
+  const [assigningPatientId, setAssigningPatientId] = useState<string | null>(null);
+  const [selectedBedId, setSelectedBedId] = useState<string>('');
+  const { data: availableBeds } = useDepartmentBeds(departmentId || null, 'available');
+  const assignBed = useAssignBed();
 
   const getTriageBadgeColor = (level: number) => {
     switch (level) {
@@ -57,6 +66,17 @@ export function TriageQueue({ patients, onNewArrival, onPatientClick }: TriageQu
       case 0:
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const handleAssignBed = async (patientId: string) => {
+    if (!selectedBedId) return;
+    try {
+      await assignBed.mutateAsync({ bedId: selectedBedId, patientId });
+      setAssigningPatientId(null);
+      setSelectedBedId('');
+    } catch (err) {
+      console.error('Failed to assign bed:', err);
     }
   };
 
@@ -190,8 +210,45 @@ export function TriageQueue({ patients, onNewArrival, onPatientClick }: TriageQu
                       <BedIcon className="w-3 h-3 text-blue-600" />
                       <span className="text-xs font-medium text-foreground">{patient.bed}</span>
                     </div>
+                  ) : assigningPatientId === patient.id ? (
+                    <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+                      <select
+                        value={selectedBedId}
+                        onChange={(e) => setSelectedBedId(e.target.value)}
+                        className="w-full text-xs px-2 py-1 bg-background border border-input rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                        autoFocus
+                      >
+                        <option value="">Select bed...</option>
+                        {availableBeds?.map((bed) => (
+                          <option key={bed.id} value={bed.id}>
+                            {bed.bedNumber} {bed.bedType ? `(${bed.bedType})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleAssignBed(patient.id)}
+                          disabled={!selectedBedId || assignBed.isPending}
+                          className="text-[10px] px-2 py-0.5 bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+                        >
+                          {assignBed.isPending ? 'Assigning...' : 'Assign'}
+                        </button>
+                        <button
+                          onClick={() => { setAssigningPatientId(null); setSelectedBedId(''); }}
+                          className="text-[10px] px-2 py-0.5 bg-muted text-muted-foreground rounded hover:bg-muted/80"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
                   ) : (
-                    <span className="text-xs text-muted-foreground">Unassigned</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setAssigningPatientId(patient.id); setSelectedBedId(''); }}
+                      className="text-xs text-primary hover:text-primary/80 hover:underline flex items-center gap-1"
+                    >
+                      <BedIcon className="w-3 h-3" />
+                      Assign Bed
+                    </button>
                   )}
                 </td>
                 <td className="p-3">
