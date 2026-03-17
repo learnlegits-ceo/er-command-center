@@ -214,6 +214,9 @@ async def assign_bed(
     bed.assigned_at = datetime.utcnow()
 
     patient.bed_id = bed.id
+    # Keep patient department in sync with the bed's department
+    if bed.department_id:
+        patient.department_id = bed.department_id
 
     # Create assignment record
     assignment = BedAssignment(

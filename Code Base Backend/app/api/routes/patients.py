@@ -601,6 +601,9 @@ async def create_patient(
         assigned_bed.current_patient_id = patient.id
         assigned_bed.assigned_at = datetime.utcnow().isoformat() + "Z"
         patient.bed_id = assigned_bed.id
+        # Keep patient department in sync with the bed's department
+        if assigned_bed.department_id:
+            patient.department_id = assigned_bed.department_id
 
         # Create bed assignment record
         bed_assignment = BedAssignment(

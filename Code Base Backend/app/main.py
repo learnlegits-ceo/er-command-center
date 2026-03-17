@@ -9,9 +9,31 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import time
 
+from sqlalchemy import text
+
 from app.core.config import settings
 from app.api import api_router
-from app.db.database import init_db
+from app.db.database import init_db, async_session_maker
+
+
+async def fix_patient_bed_department_mismatch():
+    """One-time repair: sync each patient's department_id with their bed's department."""
+    try:
+        async with async_session_maker() as db:
+            result = await db.execute(text("""
+                UPDATE patients
+                SET department_id = b.department_id
+                FROM beds b
+                WHERE patients.bed_id = b.id
+                  AND patients.department_id IS DISTINCT FROM b.department_id
+            """))
+            if result.rowcount:
+                await db.commit()
+                print(f"Fixed {result.rowcount} patient(s) with mismatched bed/department.")
+            else:
+                print("No patient bed/department mismatches found.")
+    except Exception as e:
+        print(f"Warning: Could not fix bed/department mismatches: {e}")
 
 
 @asynccontextmanager
@@ -25,6 +47,8 @@ async def lifespan(app: FastAPI):
         print("Database tables ready.")
     except Exception as e:
         print(f"Warning: Could not init DB tables: {e}")
+    # Fix any patient bed/department mismatches from before the dept split
+    await fix_patient_bed_department_mismatch()
     yield
     # Shutdown
     print(f"Shutting down {settings.APP_NAME}...")

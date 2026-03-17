@@ -43,7 +43,7 @@ services:
 
       # CORS - update with your actual Render frontend URL after deploy
       - key: CORS_ORIGINS
-        value: https://er-frontend.onrender.com,https://localhost:5173
+        value: https://er-command-center.onrender.com,https://er-frontend.onrender.com,https://localhost:5173
 
       # Redis (optional - leave blank to disable)
       - key: REDIS_URL
@@ -62,7 +62,7 @@ services:
     envVars:
       # Update this AFTER backend is deployed (use your backend URL)
       - key: VITE_API_BASE_URL
-        value: https://er-backend.onrender.com/api/v1
+        value: https://er-backend-ewti.onrender.com/api/v1
     routes:
       - type: rewrite
         source: /*
