@@ -274,7 +274,6 @@ export default function Dashboard() {
       {/* AI Triage Queue */}
       <TriageQueue
         patients={displayedPatients}
-        departmentName={departmentName}
         onNewArrival={() => setNewArrivalOpen(true)}
         onPatientClick={(patient) => setSelectedPatientId(patient.id)}
       />
@@ -295,6 +294,7 @@ export default function Dashboard() {
       {/* Patient Detail Modal */}
       <PatientDetailModal
         patient={selectedPatient}
+        departmentName={departmentName}
         open={!!selectedPatient}
         onOpenChange={(open) => {
           if (!open) {
