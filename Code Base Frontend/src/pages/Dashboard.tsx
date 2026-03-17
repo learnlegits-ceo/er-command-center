@@ -10,7 +10,6 @@ import { useDashboardStats, usePatientFlow } from '@/hooks/useDashboard'
 import { usePatients } from '@/hooks/usePatients'
 import { useActiveAlerts } from '@/hooks/useAlerts'
 import { useBeds } from '@/hooks/useBeds'
-import { useDepartments } from '@/hooks/useDepartments'
 import { useUser } from '@/contexts/UserContext'
 import { getDefaultAvatar } from '@/lib/utils'
 
@@ -47,12 +46,7 @@ export default function Dashboard() {
   const { data: alerts, isLoading: alertsLoading, error: alertsError } = useActiveAlerts()
   const { data: patientFlow } = usePatientFlow()
   const { data: bedsData } = useBeds()
-  const { data: departments } = useDepartments()
 
-  // Resolve current department ID from name
-  const currentDepartmentId = departments?.find(
-    (d) => d.name === departmentName || d.code === departmentName
-  )?.id || null
 
   // Derive real ICU capacity from beds data
   const allBeds: any[] = bedsData?.data || []
@@ -280,7 +274,7 @@ export default function Dashboard() {
       {/* AI Triage Queue */}
       <TriageQueue
         patients={displayedPatients}
-        departmentId={currentDepartmentId}
+        departmentName={departmentName}
         onNewArrival={() => setNewArrivalOpen(true)}
         onPatientClick={(patient) => setSelectedPatientId(patient.id)}
       />

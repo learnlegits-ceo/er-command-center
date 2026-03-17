@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, Clock, Camera, Bed as BedIcon } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
-import { useDepartmentBeds } from '@/hooks/useDepartments';
-import { useAssignBed } from '@/hooks/useBeds';
+import { useBeds, useAssignBed } from '@/hooks/useBeds';
 
 interface Patient {
   id: string;
@@ -41,17 +40,20 @@ interface Patient {
 
 interface TriageQueueProps {
   patients: Patient[];
-  departmentId?: string | null;
+  departmentName?: string;
   onNewArrival: () => void;
   onPatientClick: (patient: Patient) => void;
 }
 
-export function TriageQueue({ patients, departmentId, onNewArrival, onPatientClick }: TriageQueueProps) {
+export function TriageQueue({ patients, departmentName, onNewArrival, onPatientClick }: TriageQueueProps) {
   const { canRegisterPatients } = useUser();
   const [assigningPatientId, setAssigningPatientId] = useState<string | null>(null);
   const [selectedBedId, setSelectedBedId] = useState<string>('');
-  const { data: availableBeds } = useDepartmentBeds(departmentId || null, 'available');
+  const { data: bedsData } = useBeds({ department: departmentName });
   const assignBed = useAssignBed();
+
+  // Filter for available beds from the general beds API
+  const availableBeds = (bedsData?.data || []).filter((b: any) => b.status === 'available');
 
   const getTriageBadgeColor = (level: number) => {
     switch (level) {
