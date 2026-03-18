@@ -397,13 +397,14 @@ async def create_patient(
 
     # Handle doctor assignment
     assigned_doctor_id = request.assigned_doctor_id
+    resolved_department_id = request.department_id or current_user.department_id
 
-    # If department is provided but no doctor, auto-assign the best-fit doctor
-    if request.department_id and not assigned_doctor_id:
+    # If department is known but no doctor, auto-assign the best-fit doctor
+    if resolved_department_id and not assigned_doctor_id:
         # 1. Find active doctors in the department
         doctor_query = select(User).where(
             User.tenant_id == current_user.tenant_id,
-            User.department_id == request.department_id,
+            User.department_id == resolved_department_id,
             User.role == "doctor",
             User.status == "active",
             User.deleted_at.is_(None)
@@ -411,16 +412,8 @@ async def create_patient(
         doctor_result = await db.execute(doctor_query)
         dept_doctors = doctor_result.scalars().all()
 
-        # 2. If no doctors in this department, search all departments for a specialist
-        if not dept_doctors:
-            doctor_query = select(User).where(
-                User.tenant_id == current_user.tenant_id,
-                User.role == "doctor",
-                User.status == "active",
-                User.deleted_at.is_(None)
-            )
-            doctor_result = await db.execute(doctor_query)
-            dept_doctors = doctor_result.scalars().all()
+        # If no doctors in this department, skip auto-assignment
+        # (do NOT search other departments — patient must stay in their department)
 
         if dept_doctors:
             # 3. Score each doctor based on complaint-specialization match
@@ -492,7 +485,7 @@ async def create_patient(
         blood_group=request.blood_group,
         is_police_case=request.is_police_case,
         police_case_type=request.police_case_type,
-        department_id=request.department_id,
+        department_id=resolved_department_id,
         assigned_doctor_id=assigned_doctor_id,
         status="pending_triage",
         admitted_at=datetime.utcnow(),
@@ -967,15 +960,16 @@ async def transfer_patient_to_opd(
         )
         opd_dept = opd_result.scalar_one_or_none()
 
-        # Release bed if assigned
+        # Release bed if assigned — make available immediately
         if patient.bed_id:
             bed_result = await db.execute(
                 select(Bed).where(Bed.id == patient.bed_id)
             )
             bed = bed_result.scalar_one_or_none()
             if bed:
-                bed.status = "cleaning"
+                bed.status = "available"
                 bed.current_patient_id = None
+                bed.assigned_at = None
             patient.bed_id = None
 
         # Update patient department and status

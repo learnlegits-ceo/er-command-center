@@ -87,9 +87,9 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
   const queryClient = useQueryClient();
   const { data: departments, isLoading: departmentsLoading } = useDepartments();
 
-  // Pre-select department based on current page
+  // Pre-select department based on current page — always sync when modal opens
   useEffect(() => {
-    if (departments && defaultDepartmentName && !selectedDepartment) {
+    if (departments && defaultDepartmentName) {
       const matchingDept = departments.find(
         (d) => d.name === defaultDepartmentName || d.code === defaultDepartmentName
       );
@@ -97,7 +97,7 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
         setSelectedDepartment(matchingDept.id);
       }
     }
-  }, [departments, defaultDepartmentName, selectedDepartment]);
+  }, [departments, defaultDepartmentName]);
   const { data: doctors, isLoading: doctorsLoading } = useDepartmentDoctors(selectedDepartment || null);
 
   if (!open) return null;
