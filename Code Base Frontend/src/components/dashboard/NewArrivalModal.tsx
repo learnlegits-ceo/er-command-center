@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Upload, Camera, User, Video, AlertTriangle, Shield, Phone, Loader2, Building2, Stethoscope, Bed } from 'lucide-react';
+import { X, Upload, Camera, User, Video, AlertTriangle, Shield, Phone, Loader2, Building2, Stethoscope, Bed, SwitchCamera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCreatePatient } from '@/hooks/usePatients';
 import { useDepartments, useDepartmentDoctors, useDepartmentBeds } from '@/hooks/useDepartments';
@@ -32,6 +32,35 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
   const videoRef = useRef<HTMLVideoElement>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+
+  const startCamera = async (facing: 'user' | 'environment') => {
+    // Stop any existing stream
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facing }
+      });
+      setStream(mediaStream);
+      setShowCamera(true);
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+        }
+      }, 100);
+    } catch {
+      alert('Camera access denied or not available.');
+    }
+  };
+
+  const flipCamera = async () => {
+    const newMode = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(newMode);
+    await startCamera(newMode);
+  };
+
   const [formData, setFormData] = useState({
     name: '',
     age: '',
@@ -257,51 +286,48 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                     {!showCamera ? (
                       <button
                         type="button"
-                        onClick={async () => {
-                          try {
-                            const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
-                            setStream(mediaStream);
-                            setShowCamera(true);
-                            setTimeout(() => {
-                              if (videoRef.current) {
-                                videoRef.current.srcObject = mediaStream;
-                              }
-                            }, 100);
-                          } catch {
-                            alert('Camera access denied or not available.');
-                          }
-                        }}
+                        onClick={() => startCamera(facingMode)}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium"
                       >
                         <Video className="w-4 h-4" />
                         Take Photo
                       </button>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (videoRef.current && stream) {
-                            const canvas = document.createElement('canvas');
-                            canvas.width = videoRef.current.videoWidth;
-                            canvas.height = videoRef.current.videoHeight;
-                            const ctx = canvas.getContext('2d');
-                            if (ctx) {
-                              ctx.drawImage(videoRef.current, 0, 0);
-                              const dataUrl = canvas.toDataURL('image/jpeg');
-                              setPatientPhoto(dataUrl);
-                              // Convert to File for backend upload
-                              setPhotoFile(dataURLtoFile(dataUrl, `patient-photo-${Date.now()}.jpg`));
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (videoRef.current && stream) {
+                              const canvas = document.createElement('canvas');
+                              canvas.width = videoRef.current.videoWidth;
+                              canvas.height = videoRef.current.videoHeight;
+                              const ctx = canvas.getContext('2d');
+                              if (ctx) {
+                                ctx.drawImage(videoRef.current, 0, 0);
+                                const dataUrl = canvas.toDataURL('image/jpeg');
+                                setPatientPhoto(dataUrl);
+                                setPhotoFile(dataURLtoFile(dataUrl, `patient-photo-${Date.now()}.jpg`));
+                              }
+                              stream.getTracks().forEach(track => track.stop());
+                              setStream(null);
+                              setShowCamera(false);
                             }
-                            stream.getTracks().forEach(track => track.stop());
-                            setStream(null);
-                            setShowCamera(false);
-                          }
-                        }}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm font-medium"
-                      >
-                        <Camera className="w-4 h-4" />
-                        Capture
-                      </button>
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm font-medium"
+                        >
+                          <Camera className="w-4 h-4" />
+                          Capture
+                        </button>
+                        <button
+                          type="button"
+                          onClick={flipCamera}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                          title={facingMode === 'user' ? 'Switch to back camera' : 'Switch to front camera'}
+                        >
+                          <SwitchCamera className="w-4 h-4" />
+                          Flip
+                        </button>
+                      </>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
