@@ -6,7 +6,6 @@ import { PrescribeModal } from './PrescribeModal';
 import { DischargeModal } from './DischargeModal';
 import { EditPatientModal } from './EditPatientModal';
 import { usePatientVitals, usePatientTriageTimeline, useAddVitals, useRecommendTriageShift, useShiftTriage, useTransferToOPD, usePatientNotes, useCreateNote, usePatientPrescriptions } from '@/hooks/usePatientDetails';
-import { useBeds, useAssignBed } from '@/hooks/useBeds';
 
 interface VitalRecord {
   id: string;
@@ -93,7 +92,6 @@ interface Patient {
 
 interface PatientDetailModalProps {
   patient: Patient | null;
-  departmentName?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -122,7 +120,7 @@ function formatRecordedDate(dateStr: string | null | undefined): string {
   return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-export function PatientDetailModal({ patient, departmentName, open, onOpenChange }: PatientDetailModalProps) {
+export function PatientDetailModal({ patient, open, onOpenChange }: PatientDetailModalProps) {
   const { user, canAddNurseNotes, canAddDoctorComments, canDischarge, canPrescribe } = useUser();
   const [activeTab, setActiveTab] = useState<'vitals' | 'triage' | 'notes' | 'doctor' | 'mar' | 'lab' | 'consult'>('vitals');
 
@@ -199,24 +197,6 @@ export function PatientDetailModal({ patient, departmentName, open, onOpenChange
 
   // Vitals chart toggle
   const [showVitalsChart, setShowVitalsChart] = useState(false);
-
-  // Bed assignment state
-  const [showBedAssign, setShowBedAssign] = useState(false);
-  const [selectedBedId, setSelectedBedId] = useState('');
-  const { data: bedsData } = useBeds({ department: departmentName });
-  const assignBedMutation = useAssignBed();
-  const availableBeds = (bedsData?.data || []).filter((b: any) => b.status === 'available');
-
-  const handleAssignBed = async () => {
-    if (!selectedBedId || !patient) return;
-    try {
-      await assignBedMutation.mutateAsync({ bedId: selectedBedId, patientId: patient.id });
-      setShowBedAssign(false);
-      setSelectedBedId('');
-    } catch (err) {
-      console.error('Failed to assign bed:', err);
-    }
-  };
 
   // Action modals state
   const [showPrescribeModal, setShowPrescribeModal] = useState(false);
@@ -537,45 +517,7 @@ export function PatientDetailModal({ patient, departmentName, open, onOpenChange
                 </div>
                 <div className="flex items-center gap-1">
                   <Bed className="w-3 h-3" />
-                  {patient.bed ? (
-                    <span>Bed {patient.bed}</span>
-                  ) : showBedAssign ? (
-                    <div className="flex items-center gap-1">
-                      <select
-                        value={selectedBedId}
-                        onChange={(e) => setSelectedBedId(e.target.value)}
-                        className="text-xs px-2 py-0.5 bg-background border border-input rounded focus:outline-none focus:ring-1 focus:ring-primary"
-                        autoFocus
-                      >
-                        <option value="">Select bed...</option>
-                        {availableBeds.map((bed: any) => (
-                          <option key={bed.id} value={bed.id}>
-                            {bed.bedNumber} {bed.bedType ? `(${bed.bedType})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={handleAssignBed}
-                        disabled={!selectedBedId || assignBedMutation.isPending}
-                        className="text-[10px] px-2 py-0.5 bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
-                      >
-                        {assignBedMutation.isPending ? '...' : 'Assign'}
-                      </button>
-                      <button
-                        onClick={() => { setShowBedAssign(false); setSelectedBedId(''); }}
-                        className="text-[10px] px-2 py-0.5 bg-muted text-muted-foreground rounded hover:bg-muted/80"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setShowBedAssign(true)}
-                      className="text-primary hover:text-primary/80 hover:underline"
-                    >
-                      No bed assigned
-                    </button>
-                  )}
+                  <span>{patient.bed ? `Bed ${patient.bed}` : 'No bed assigned'}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Clock className="w-3 h-3" />

@@ -572,10 +572,10 @@ async def create_patient(
     )
     db.add(triage_record)
 
-    # Handle bed assignment
+    # Handle bed assignment — always auto-assign
     assigned_bed = None
     if request.bed_id:
-        # Manual bed selection
+        # Explicit bed selection
         bed_result = await db.execute(
             select(Bed).where(
                 Bed.id == request.bed_id,
@@ -584,11 +584,22 @@ async def create_patient(
             )
         )
         assigned_bed = bed_result.scalar_one_or_none()
-    elif request.auto_assign_bed and request.department_id:
-        # Auto-assign available bed from department, prioritize by triage level
+
+    if not assigned_bed and patient.department_id:
+        # Auto-assign: first try beds in the patient's department
         bed_query = select(Bed).where(
             Bed.tenant_id == current_user.tenant_id,
-            Bed.department_id == request.department_id,
+            Bed.department_id == patient.department_id,
+            Bed.status == "available",
+            Bed.is_active == True
+        ).order_by(Bed.bed_number).limit(1)
+        bed_result = await db.execute(bed_query)
+        assigned_bed = bed_result.scalar_one_or_none()
+
+    if not assigned_bed:
+        # Fallback: any available bed in the tenant
+        bed_query = select(Bed).where(
+            Bed.tenant_id == current_user.tenant_id,
             Bed.status == "available",
             Bed.is_active == True
         ).order_by(Bed.bed_number).limit(1)

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { X, Upload, Camera, User, Video, AlertTriangle, Shield, Phone, Loader2, Building2, Stethoscope, Bed, SwitchCamera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCreatePatient } from '@/hooks/usePatients';
-import { useDepartments, useDepartmentDoctors, useDepartmentBeds } from '@/hooks/useDepartments';
+import { useDepartments, useDepartmentDoctors } from '@/hooks/useDepartments';
 import { useQueryClient } from '@tanstack/react-query';
 import { endpoints } from '@/lib/api';
 
@@ -82,8 +82,6 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
   const [policeAlertError, setPoliceAlertError] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('');
   const [selectedDoctor, setSelectedDoctor] = useState('');
-  const [selectedBed, setSelectedBed] = useState('');
-  const [autoAssignBed, setAutoAssignBed] = useState(true);
 
   const createPatient = useCreatePatient();
   const queryClient = useQueryClient();
@@ -101,7 +99,6 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
     }
   }, [departments, defaultDepartmentName, selectedDepartment]);
   const { data: doctors, isLoading: doctorsLoading } = useDepartmentDoctors(selectedDepartment || null);
-  const { data: beds, isLoading: bedsLoading } = useDepartmentBeds(selectedDepartment || null, 'available');
 
   if (!open) return null;
 
@@ -153,8 +150,7 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
         police_case_type: policeCaseType || undefined,
         department_id: selectedDepartment || undefined,
         assigned_doctor_id: selectedDoctor || undefined,
-        bed_id: selectedBed || undefined,
-        auto_assign_bed: autoAssignBed,
+        auto_assign_bed: true,
         vitals: formData.vitals.hr || formData.vitals.bp || formData.vitals.spo2 || formData.vitals.temp || formData.vitals.rr ? {
           hr: formData.vitals.hr || undefined,
           bp: formData.vitals.bp || undefined,
@@ -218,8 +214,6 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
       setPoliceAlertError('');
       setSelectedDepartment('');
       setSelectedDoctor('');
-      setSelectedBed('');
-      setAutoAssignBed(true);
       onOpenChange(false);
     } catch (error) {
       console.error('Failed to register patient:', error);
@@ -480,50 +474,10 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
               </div>
             </div>
 
-            {/* Bed Assignment */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="block text-sm font-medium text-foreground">
-                  <Bed className="w-4 h-4 inline mr-1" />
-                  Bed Assignment
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={autoAssignBed}
-                    onChange={(e) => {
-                      setAutoAssignBed(e.target.checked);
-                      if (e.target.checked) setSelectedBed('');
-                    }}
-                    className="w-4 h-4 rounded border-input"
-                  />
-                  Auto-assign
-                </label>
-              </div>
-              {!autoAssignBed && (
-                <select
-                  value={selectedBed}
-                  onChange={(e) => setSelectedBed(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  disabled={!selectedDepartment || bedsLoading}
-                >
-                  <option value="">Select a bed...</option>
-                  {beds?.map((bed) => (
-                    <option key={bed.id} value={bed.id}>
-                      {bed.bedNumber} {bed.bedType ? `(${bed.bedType})` : ''} {bed.wing ? `- ${bed.wing}` : ''}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <p className="text-xs text-muted-foreground">
-                {autoAssignBed
-                  ? 'A bed will be automatically assigned from the selected department'
-                  : !selectedDepartment
-                    ? 'Select a department first'
-                    : beds?.length === 0
-                      ? 'No available beds in this department'
-                      : `${beds?.length} beds available`}
-              </p>
+            {/* Bed auto-assigned info */}
+            <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <Bed className="w-4 h-4 text-blue-600" />
+              <p className="text-sm text-blue-700">A bed will be automatically assigned from the selected department</p>
             </div>
 
             {/* Police/Emergency Case */}

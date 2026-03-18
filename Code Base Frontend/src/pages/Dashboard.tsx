@@ -294,7 +294,6 @@ export default function Dashboard() {
       {/* Patient Detail Modal */}
       <PatientDetailModal
         patient={selectedPatient}
-        departmentName={departmentName}
         open={!!selectedPatient}
         onOpenChange={(open) => {
           if (!open) {
