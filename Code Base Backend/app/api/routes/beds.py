@@ -205,8 +205,9 @@ async def assign_bed(
         )
         old_bed = old_bed_result.scalar_one_or_none()
         if old_bed:
-            old_bed.status = "cleaning"
+            old_bed.status = "available"
             old_bed.current_patient_id = None
+            old_bed.assigned_at = None
 
     # Assign bed
     bed.status = "occupied"
@@ -214,9 +215,6 @@ async def assign_bed(
     bed.assigned_at = datetime.utcnow()
 
     patient.bed_id = bed.id
-    # Keep patient department in sync with the bed's department
-    if bed.department_id:
-        patient.department_id = bed.department_id
 
     # Create assignment record
     assignment = BedAssignment(
@@ -280,8 +278,8 @@ async def release_bed(
     if bed.current_patient:
         bed.current_patient.bed_id = None
 
-    # Release bed
-    bed.status = "cleaning"
+    # Release bed — make available immediately
+    bed.status = "available"
     bed.current_patient_id = None
     bed.assigned_at = None
 
@@ -292,7 +290,7 @@ async def release_bed(
         "data": {
             "bedId": str(bed.id),
             "bedNumber": bed.bed_number,
-            "status": "cleaning",
+            "status": "available",
             "releasedAt": datetime.utcnow().isoformat()
         }
     }

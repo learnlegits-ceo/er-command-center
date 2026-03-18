@@ -49,6 +49,19 @@ async def lifespan(app: FastAPI):
         print(f"Warning: Could not init DB tables: {e}")
     # Fix any patient bed/department mismatches from before the dept split
     await fix_patient_bed_department_mismatch()
+    # Fix beds stuck in "cleaning" status — make them available
+    try:
+        async with async_session_maker() as db:
+            result = await db.execute(text("""
+                UPDATE beds
+                SET status = 'available', current_patient_id = NULL, assigned_at = NULL
+                WHERE status = 'cleaning'
+            """))
+            if result.rowcount:
+                await db.commit()
+                print(f"Fixed {result.rowcount} bed(s) stuck in cleaning status.")
+    except Exception as e:
+        print(f"Warning: Could not fix cleaning beds: {e}")
     yield
     # Shutdown
     print(f"Shutting down {settings.APP_NAME}...")

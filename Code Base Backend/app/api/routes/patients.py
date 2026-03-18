@@ -572,10 +572,10 @@ async def create_patient(
     )
     db.add(triage_record)
 
-    # Handle bed assignment — always auto-assign
+    # Handle bed assignment — auto-assign from same department only
     assigned_bed = None
     if request.bed_id:
-        # Explicit bed selection
+        # Explicit bed selection (must be in patient's department)
         bed_result = await db.execute(
             select(Bed).where(
                 Bed.id == request.bed_id,
@@ -586,7 +586,7 @@ async def create_patient(
         assigned_bed = bed_result.scalar_one_or_none()
 
     if not assigned_bed and patient.department_id:
-        # Auto-assign: first try beds in the patient's department
+        # Auto-assign: only from the patient's own department
         bed_query = select(Bed).where(
             Bed.tenant_id == current_user.tenant_id,
             Bed.department_id == patient.department_id,
@@ -596,25 +596,11 @@ async def create_patient(
         bed_result = await db.execute(bed_query)
         assigned_bed = bed_result.scalar_one_or_none()
 
-    if not assigned_bed:
-        # Fallback: any available bed in the tenant
-        bed_query = select(Bed).where(
-            Bed.tenant_id == current_user.tenant_id,
-            Bed.status == "available",
-            Bed.is_active == True
-        ).order_by(Bed.bed_number).limit(1)
-        bed_result = await db.execute(bed_query)
-        assigned_bed = bed_result.scalar_one_or_none()
-
     if assigned_bed:
-        # Assign bed to patient
         assigned_bed.status = "occupied"
         assigned_bed.current_patient_id = patient.id
         assigned_bed.assigned_at = datetime.utcnow().isoformat() + "Z"
         patient.bed_id = assigned_bed.id
-        # Keep patient department in sync with the bed's department
-        if assigned_bed.department_id:
-            patient.department_id = assigned_bed.department_id
 
         # Create bed assignment record
         bed_assignment = BedAssignment(
@@ -889,15 +875,16 @@ async def discharge_patient(
     patient.discharge_notes = request.discharge_notes
     patient.follow_up_date = request.follow_up_date
 
-    # Release bed if assigned
+    # Release bed if assigned — mark as available immediately
     if patient.bed_id:
         bed_result = await db.execute(
             select(Bed).where(Bed.id == patient.bed_id)
         )
         bed = bed_result.scalar_one_or_none()
         if bed:
-            bed.status = "cleaning"
+            bed.status = "available"
             bed.current_patient_id = None
+            bed.assigned_at = None
         patient.bed_id = None
 
     # Add discharge prescriptions
