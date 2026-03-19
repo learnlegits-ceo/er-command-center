@@ -156,13 +156,26 @@ export function EditPatientModal({ patient, open, onOpenChange }: EditPatientMod
             <label className="block text-sm font-medium text-foreground mb-1">
               Phone Number
             </label>
-            <input
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              className="w-full px-3 py-2 bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-              placeholder="Patient's phone number"
-            />
+            <div className="flex">
+              <span className="inline-flex items-center px-3 py-2 bg-muted border border-r-0 border-input rounded-l-lg text-sm text-muted-foreground font-medium">
+                +91
+              </span>
+              <input
+                type="tel"
+                value={formData.phone.replace(/^\+91\s*/, '')}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                  setFormData({ ...formData, phone: `+91 ${digits}` });
+                }}
+                className="w-full px-3 py-2 bg-background border rounded-r-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                placeholder="98765 43210"
+                maxLength={10}
+              />
+            </div>
+            {formData.phone.replace(/^\+91\s*/, '').replace(/\D/g, '').length > 0 &&
+             formData.phone.replace(/^\+91\s*/, '').replace(/\D/g, '').length < 10 && (
+              <p className="text-xs text-red-500 mt-1">Phone number must be 10 digits</p>
+            )}
           </div>
 
           {/* Blood Group */}
