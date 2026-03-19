@@ -842,13 +842,43 @@ export function PrescribeModal({ patientName, patientId, open, onOpenChange, onP
               </div>
               <div>
                 <label className="block text-xs text-purple-700 mb-1">Special Instructions</label>
-                <input
-                  type="text"
-                  value={currentMed.instructions}
-                  onChange={(e) => setCurrentMed({ ...currentMed, instructions: e.target.value })}
+                <select
+                  value={['Before food', 'After food', 'With food', 'Empty stomach', 'At bedtime', 'As needed (SOS)', 'With warm water', 'Sublingual (under tongue)'].includes(currentMed.instructions) ? currentMed.instructions : currentMed.instructions ? '_custom' : ''}
+                  onChange={(e) => {
+                    if (e.target.value === '_custom') {
+                      setCurrentMed({ ...currentMed, instructions: '' });
+                      // Focus the text input after render
+                      setTimeout(() => {
+                        const el = document.getElementById('custom-instructions-input');
+                        if (el) el.focus();
+                      }, 50);
+                    } else {
+                      setCurrentMed({ ...currentMed, instructions: e.target.value });
+                    }
+                  }}
                   className="w-full px-3 py-2 bg-white border border-purple-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
-                  placeholder="e.g., After meals"
-                />
+                >
+                  <option value="">Select instruction</option>
+                  <option value="Before food">Before food</option>
+                  <option value="After food">After food</option>
+                  <option value="With food">With food</option>
+                  <option value="Empty stomach">Empty stomach</option>
+                  <option value="At bedtime">At bedtime</option>
+                  <option value="As needed (SOS)">As needed (SOS)</option>
+                  <option value="With warm water">With warm water</option>
+                  <option value="Sublingual (under tongue)">Sublingual (under tongue)</option>
+                  <option value="_custom">Other (type custom)...</option>
+                </select>
+                {(!['', 'Before food', 'After food', 'With food', 'Empty stomach', 'At bedtime', 'As needed (SOS)', 'With warm water', 'Sublingual (under tongue)'].includes(currentMed.instructions)) && (
+                  <input
+                    id="custom-instructions-input"
+                    type="text"
+                    value={currentMed.instructions}
+                    onChange={(e) => setCurrentMed({ ...currentMed, instructions: e.target.value })}
+                    className="w-full mt-1.5 px-3 py-2 bg-white border border-purple-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                    placeholder="Type custom instructions..."
+                  />
+                )}
               </div>
             </div>
             <button
