@@ -394,69 +394,35 @@ export function OPDPatientModal({ patient, open, onOpenChange }: OPDPatientModal
           </div>
         </div>
 
-        {/* Patient IDs and Details */}
-        <div className="px-6 py-4 border-b bg-muted/30">
-          <div className="flex items-center gap-6">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">UHI (Universal)</p>
-              <div className="inline-flex items-center px-3 py-1 rounded bg-blue-100 text-blue-700 font-medium">
-                {patient.uhi}
-              </div>
-            </div>
-            {patient.tags?.includes('ER Referral') && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">EUHI (ER Encounter)</p>
-                <div className="inline-flex items-center px-3 py-1 rounded bg-orange-100 text-orange-700 font-medium">
-                  {patient.euhi}
-                </div>
-              </div>
-            )}
-            <div className="ml-auto flex items-center gap-4 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <span className="font-medium">Doctor:</span>
-                <span>{patient.doctor}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="font-medium">Bed:</span>
-                <span>{patient.bed}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Patient Info row */}
-          <div className="grid grid-cols-3 gap-4 mt-3 text-sm">
-            <div>
-              <span className="text-xs text-muted-foreground">Age & Gender:</span>{' '}
-              <span className="font-medium">{patient.age}</span>
-            </div>
-            <div>
-              <span className="text-xs text-muted-foreground">Blood Group:</span>{' '}
-              <span className="font-medium text-red-600">{patient.bloodGroup}</span>
-            </div>
-            <div>
-              <span className="text-xs text-muted-foreground">Contact:</span>{' '}
-              <span className="font-medium">{patient.phone}</span>
-            </div>
-          </div>
-
-          {/* Tags */}
-          {patient.tags && patient.tags.length > 0 && (
-            <div className="flex items-center gap-2 mt-2">
-              {patient.tags.map((tag: string) => (
-                <span key={tag} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700 border border-orange-300">
-                  {tag}
-                </span>
-              ))}
-            </div>
+        {/* Compact patient info bar */}
+        <div className="px-6 py-2 border-b bg-muted/30 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+          <span className="inline-flex items-center gap-1">
+            <span className="text-muted-foreground">UHI:</span>
+            <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">{patient.uhi}</span>
+          </span>
+          {patient.tags?.includes('ER Referral') && patient.euhi && (
+            <span className="inline-flex items-center gap-1">
+              <span className="text-muted-foreground">EUHI:</span>
+              <span className="px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">{patient.euhi}</span>
+            </span>
           )}
+          <span className="text-muted-foreground">Blood: <span className="font-medium text-red-600">{patient.bloodGroup}</span></span>
+          <span className="text-muted-foreground">Contact: <span className="font-medium text-foreground">{patient.phone}</span></span>
+          <span className="ml-auto text-muted-foreground">Dr. <span className="font-medium text-foreground">{patient.doctor}</span></span>
+          <span className="text-muted-foreground">Bed: <span className="font-medium text-foreground">{patient.bed}</span></span>
+          {patient.tags && patient.tags.length > 0 && patient.tags.map((tag: string) => (
+            <span key={tag} className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-700 border border-orange-300">
+              {tag}
+            </span>
+          ))}
         </div>
 
         {/* AI Triage Assessment (collapsible, like ER modal) */}
         {patient.triage && patient.priority && (
-          <div className={`mx-6 mt-3 rounded-lg border overflow-hidden ${getPriorityBgColor(patient.priority)}`}>
+          <div className={`mx-6 mt-2 rounded-lg border overflow-hidden ${getPriorityBgColor(patient.priority)}`}>
             <button
               onClick={() => setShowTriageDetails(!showTriageDetails)}
-              className="w-full flex items-center justify-between p-3 hover:bg-black/5 transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2 hover:bg-black/5 transition-colors"
             >
               <div className="flex items-center gap-2">
                 <Brain className="w-4 h-4 text-purple-600" />
@@ -484,7 +450,7 @@ export function OPDPatientModal({ patient, open, onOpenChange }: OPDPatientModal
               )}
             </button>
             {showTriageDetails && (
-              <div className="px-3 pb-3 border-t border-black/10 max-h-40 overflow-y-auto">
+              <div className="px-3 pb-3 border-t border-black/10">
                 {patient.triage.reasoning && (
                   <p className="text-xs text-muted-foreground bg-background/60 rounded-lg p-2 mt-2 mb-2">
                     {patient.triage.reasoning}
