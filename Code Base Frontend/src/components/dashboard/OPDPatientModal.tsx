@@ -484,7 +484,7 @@ export function OPDPatientModal({ patient, open, onOpenChange }: OPDPatientModal
               )}
             </button>
             {showTriageDetails && (
-              <div className="px-3 pb-3 border-t border-black/10">
+              <div className="px-3 pb-3 border-t border-black/10 max-h-40 overflow-y-auto">
                 {patient.triage.reasoning && (
                   <p className="text-xs text-muted-foreground bg-background/60 rounded-lg p-2 mt-2 mb-2">
                     {patient.triage.reasoning}
