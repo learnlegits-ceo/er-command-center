@@ -1,6 +1,6 @@
 import { useState, useRef, type ReactNode } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { X, Plus, MessageSquare, FileText, Pill, LogOut as DischargeIcon, Pencil, Brain, AlertTriangle, CheckCircle2, Clock, ChevronRight, Printer, UserX, Loader2, Activity, BarChart2, FlaskConical, Users } from 'lucide-react';
+import { X, Plus, MessageSquare, FileText, Pill, LogOut as DischargeIcon, Pencil, Brain, AlertTriangle, CheckCircle2, Clock, ChevronRight, ChevronDown, ChevronUp, Printer, UserX, Loader2, Activity, BarChart2, FlaskConical, Users } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
 import { useDischargePatient, usePatientNotes, useCreateNote, usePatientVitals, useAddVitals, usePatientPrescriptions } from '@/hooks/usePatientDetails';
 import { PrescribeModal } from './PrescribeModal';
@@ -133,6 +133,9 @@ export function OPDPatientModal({ patient, open, onOpenChange }: OPDPatientModal
     source: 'manual' as 'manual' | 'ocr'
   });
   const [showVitalsChart, setShowVitalsChart] = useState(false);
+
+  // Triage toggle
+  const [showTriageDetails, setShowTriageDetails] = useState(false);
 
   // Lab Orders state
   const [showAddLabOrder, setShowAddLabOrder] = useState(false);
@@ -448,42 +451,56 @@ export function OPDPatientModal({ patient, open, onOpenChange }: OPDPatientModal
           )}
         </div>
 
-        {/* AI Triage Assessment (compact, above tabs) */}
+        {/* AI Triage Assessment (collapsible, like ER modal) */}
         {patient.triage && patient.priority && (
-          <div className={`mx-6 mt-4 rounded-lg p-3 border ${getPriorityBgColor(patient.priority)}`}>
-            <div className="flex items-center gap-2 mb-2">
-              <Brain className="w-4 h-4 text-purple-600" />
-              <span className="text-sm font-semibold text-foreground">AI Triage Assessment</span>
-              <span className={`ml-2 font-semibold text-sm ${getPriorityTextColor(patient.priority)}`}>
-                {patient.priority <= 2 ? <AlertTriangle className="w-4 h-4 inline mr-1" /> : <CheckCircle2 className="w-4 h-4 inline mr-1" />}
-                {patient.priorityLabel || `Level ${patient.priority}`}
-              </span>
-              {patient.triage.confidence > 0 && (
-                <span className="text-xs text-muted-foreground ml-2">
-                  ({Math.round(patient.triage.confidence * 100)}% confidence)
+          <div className={`mx-6 mt-3 rounded-lg border overflow-hidden ${getPriorityBgColor(patient.priority)}`}>
+            <button
+              onClick={() => setShowTriageDetails(!showTriageDetails)}
+              className="w-full flex items-center justify-between p-3 hover:bg-black/5 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Brain className="w-4 h-4 text-purple-600" />
+                <span className="text-sm font-semibold text-foreground">AI Triage Assessment</span>
+                <span className={`ml-1 font-semibold text-sm ${getPriorityTextColor(patient.priority)}`}>
+                  {patient.priority <= 2 ? <AlertTriangle className="w-4 h-4 inline mr-1" /> : <CheckCircle2 className="w-4 h-4 inline mr-1" />}
+                  {patient.priorityLabel || `Level ${patient.priority}`}
                 </span>
+                {patient.triage.confidence > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    ({Math.round(patient.triage.confidence * 100)}%)
+                  </span>
+                )}
+                {patient.triage.estimatedWaitTime && (
+                  <span className="ml-2 flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="w-3 h-3" />
+                    {patient.triage.estimatedWaitTime}
+                  </span>
+                )}
+              </div>
+              {showTriageDetails ? (
+                <ChevronUp className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
               )}
-              {patient.triage.estimatedWaitTime && (
-                <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-                  <Clock className="w-3 h-3" />
-                  Est. wait: {patient.triage.estimatedWaitTime}
-                </span>
-              )}
-            </div>
-            {patient.triage.reasoning && (
-              <p className="text-xs text-muted-foreground bg-background/60 rounded-lg p-2 mb-2">
-                {patient.triage.reasoning}
-              </p>
-            )}
-            {patient.triage.recommendations && patient.triage.recommendations.length > 0 && (
-              <ul className="space-y-0.5">
-                {patient.triage.recommendations.map((rec, idx) => (
-                  <li key={idx} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                    <ChevronRight className="w-3 h-3 mt-0.5 text-primary flex-shrink-0" />
-                    <span>{rec}</span>
-                  </li>
-                ))}
-              </ul>
+            </button>
+            {showTriageDetails && (
+              <div className="px-3 pb-3 border-t border-black/10">
+                {patient.triage.reasoning && (
+                  <p className="text-xs text-muted-foreground bg-background/60 rounded-lg p-2 mt-2 mb-2">
+                    {patient.triage.reasoning}
+                  </p>
+                )}
+                {patient.triage.recommendations && patient.triage.recommendations.length > 0 && (
+                  <ul className="space-y-0.5">
+                    {patient.triage.recommendations.map((rec, idx) => (
+                      <li key={idx} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                        <ChevronRight className="w-3 h-3 mt-0.5 text-primary flex-shrink-0" />
+                        <span>{rec}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
         )}
