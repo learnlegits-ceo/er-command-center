@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { getDefaultAvatar } from '@/lib/utils'
 import { endpoints } from '@/lib/api'
 
-export type UserRole = 'nurse' | 'doctor' | 'admin'
+export type UserRole = 'nurse' | 'doctor' | 'admin' | 'platform_admin'
 
 export interface User {
   id: string
@@ -17,6 +17,8 @@ interface UserContextType {
   setUser: (user: User | null) => void
   isAuthLoading: boolean
   // Permission helpers
+  isPlatformAdmin: boolean
+  canAccessPlatform: boolean
   canRegisterPatients: boolean
   canAddNurseNotes: boolean
   canEditNurseNotes: boolean
@@ -27,6 +29,7 @@ interface UserContextType {
   canTriage: boolean
   canPrescribe: boolean
   canDischarge: boolean
+  canViewBilling: boolean
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined)
@@ -120,6 +123,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   // Compute permissions based on role
   const permissions = {
+    isPlatformAdmin: user?.role === 'platform_admin',
+    canAccessPlatform: user?.role === 'platform_admin',
     canRegisterPatients: user?.role === 'nurse' || user?.role === 'admin',
     canAddNurseNotes: user?.role === 'nurse' || user?.role === 'admin',
     canEditNurseNotes: user?.role === 'nurse' || user?.role === 'admin',
@@ -130,6 +135,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     canTriage: user?.role === 'nurse' || user?.role === 'admin',
     canPrescribe: user?.role === 'doctor' || user?.role === 'admin',
     canDischarge: user?.role === 'doctor' || user?.role === 'nurse' || user?.role === 'admin',
+    canViewBilling: user?.role === 'admin' || user?.role === 'platform_admin',
   }
 
   return (

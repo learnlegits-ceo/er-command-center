@@ -15,7 +15,7 @@ class Bed(Base, TimestampMixin):
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     bed_number = Column(String(20), nullable=False)
     department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=False)
-    bed_type = Column(String(30))  # icu, general, isolation, pediatric, maternity, emergency
+    bed_type = Column(String(30))  # icu, general, isolation, pediatric, maternity, emergency, daycare, observation
     floor = Column(String(20))
     wing = Column(String(20))
     status = Column(String(20), default="available")  # available, occupied, maintenance, cleaning, reserved

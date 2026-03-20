@@ -15,9 +15,10 @@ from app.core.security import get_password_hash
 from app.db.database import Base
 from app.models.tenant import Tenant
 from app.models.department import Department
-from app.models.user import User
+from app.models.user import User, UserSettings
 from app.models.bed import Bed
 from app.models.patient import Patient, PatientVitals
+from app.models.subscription import SubscriptionPlan
 
 # Create async engine
 engine = create_async_engine(
@@ -46,6 +47,110 @@ async def create_tables():
 async def seed_data():
     """Seed the database with sample data."""
     async with async_session_maker() as session:
+        # Create Subscription Plans
+        starter_plan = SubscriptionPlan(
+            id=uuid.uuid4(),
+            name="Starter",
+            code="starter",
+            description="For small ERs and urgent care centers",
+            included_users=10,
+            included_beds=20,
+            max_users=20,
+            max_beds=50,
+            max_departments=5,
+            base_price=9999,
+            price_per_extra_user=299,
+            price_per_extra_bed=499,
+            annual_discount_percent=17,
+            billing_cycle="monthly",
+            currency="INR",
+            features={
+                "ai_triage": True, "ai_triage_limit": 100,
+                "police_cases": False, "opd": False,
+                "multi_dept_routing": False, "api_access": False,
+                "abdm": False, "custom_branding": False,
+                "advanced_analytics": False,
+            },
+            is_active=True,
+            sort_order=1,
+        )
+        session.add(starter_plan)
+
+        pro_plan = SubscriptionPlan(
+            id=uuid.uuid4(),
+            name="Professional",
+            code="pro",
+            description="For mid-size hospital ERs with full features",
+            included_users=30,
+            included_beds=50,
+            max_users=100,
+            max_beds=200,
+            max_departments=15,
+            base_price=24999,
+            price_per_extra_user=249,
+            price_per_extra_bed=399,
+            annual_discount_percent=17,
+            billing_cycle="monthly",
+            currency="INR",
+            features={
+                "ai_triage": True, "ai_triage_limit": 0,
+                "police_cases": True, "opd": True,
+                "multi_dept_routing": True, "api_access": True,
+                "abdm": True, "custom_branding": False,
+                "advanced_analytics": True,
+            },
+            is_active=True,
+            sort_order=2,
+        )
+        session.add(pro_plan)
+
+        enterprise_plan = SubscriptionPlan(
+            id=uuid.uuid4(),
+            name="Enterprise",
+            code="enterprise",
+            description="For large hospitals and chains with unlimited access",
+            included_users=0,  # unlimited
+            included_beds=0,
+            max_users=0,
+            max_beds=0,
+            max_departments=0,
+            base_price=59999,
+            price_per_extra_user=199,
+            price_per_extra_bed=299,
+            annual_discount_percent=17,
+            billing_cycle="monthly",
+            currency="INR",
+            features={
+                "ai_triage": True, "ai_triage_limit": 0,
+                "police_cases": True, "opd": True,
+                "multi_dept_routing": True, "api_access": True,
+                "abdm": True, "custom_branding": True,
+                "advanced_analytics": True,
+            },
+            is_active=True,
+            sort_order=3,
+        )
+        session.add(enterprise_plan)
+        await session.flush()
+        print("[OK] Subscription plans created (Starter, Professional, Enterprise)")
+
+        # Create Platform Admin (internal only — never shown on login page)
+        platform_admin = User(
+            id=uuid.uuid4(),
+            tenant_id=None,
+            employee_id="PLATFORM-001",
+            email="platform@ercommandcenter.com",
+            password_hash=get_password_hash("Platform@2026"),
+            name="Platform Admin",
+            role="platform_admin",
+            status="active",
+            joined_at=date.today(),
+        )
+        session.add(platform_admin)
+        platform_settings = UserSettings(user_id=platform_admin.id)
+        session.add(platform_settings)
+        print("[OK] Platform admin created (platform@ercommandcenter.com)")
+
         # Create Tenant
         tenant_id = uuid.uuid4()
         tenant = Tenant(
@@ -56,14 +161,16 @@ async def seed_data():
             address="123 Medical Center Drive, Healthcare City",
             phone="+1-555-0100",
             email="admin@citygeneral.health",
+            plan_id=enterprise_plan.id,
             subscription_plan="enterprise",
             subscription_status="active",
+            subscription_starts_at=datetime.utcnow(),
             max_users=200,
             max_beds=500,
             is_active=True
         )
         session.add(tenant)
-        print("[OK] Tenant created")
+        print("[OK] Tenant created (linked to Enterprise plan)")
 
         # Create Departments
         departments_data = [
@@ -411,6 +518,8 @@ async def seed_data():
         print(f"  Admin:  admin@hospital.com / password123")
         print(f"  Doctor: sarah.johnson@hospital.com / password123")
         print(f"  Nurse:  emily.davis@hospital.com / password123")
+        print(f"\n Platform Admin (INTERNAL ONLY — never on login page):")
+        print(f"  platform@ercommandcenter.com / Platform@2026")
 
 
 async def main():

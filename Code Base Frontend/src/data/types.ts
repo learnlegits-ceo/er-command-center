@@ -122,3 +122,99 @@ export interface DashboardStats {
   activeAlerts: number
   averageWaitTime: number
 }
+
+// ─── SaaS Platform Types ──────────────────────────────────────
+
+export interface SubscriptionPlan {
+  id: string
+  name: string
+  code: string
+  description?: string
+  includedUsers: number
+  includedBeds: number
+  maxUsers: number
+  maxBeds: number
+  maxDepartments: number
+  basePrice: number
+  pricePerExtraUser: number
+  pricePerExtraBed: number
+  annualDiscountPercent: number
+  billingCycle: 'monthly' | 'yearly'
+  currency: string
+  features: Record<string, any>
+  isActive: boolean
+  sortOrder: number
+}
+
+export interface Tenant {
+  id: string
+  name: string
+  code: string
+  domain?: string
+  logoUrl?: string
+  address?: string
+  phone?: string
+  email?: string
+  plan?: SubscriptionPlan
+  planName?: string
+  subscriptionStatus: 'active' | 'inactive' | 'suspended'
+  subscriptionStartsAt?: string
+  subscriptionEndsAt?: string
+  isActive: boolean
+  userCount?: number
+  bedCount?: number
+  departmentCount?: number
+  createdAt?: string
+}
+
+export interface BedTypePricing {
+  id: string | null
+  bedType: string
+  costPerDay: number
+  currency: string
+  isActive: boolean
+  status: 'configured' | 'not_set'
+}
+
+export interface UsageStats {
+  activeUsers: number
+  totalBeds: number
+  occupiedBeds: number
+  aiTriageCalls: number
+  planLimit: {
+    maxUsers: number
+    maxBeds: number
+    includedUsers: number
+    includedBeds: number
+  }
+}
+
+export interface Invoice {
+  id: string
+  invoiceNumber: string
+  periodStart: string
+  periodEnd: string
+  baseAmount: number
+  userAmount: number
+  bedAmount: number
+  subtotal: number
+  taxRate: number
+  taxAmount: number
+  totalAmount: number
+  currency: string
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
+  dueDate?: string
+  paidAt?: string
+  paymentMethod?: string
+  lineItems: Array<{ description: string; quantity: number; unitPrice: number; amount: number }>
+  createdAt?: string
+}
+
+export interface PlatformDashboardData {
+  totalHospitals: number
+  totalUsers: number
+  totalBeds: number
+  occupiedBeds: number
+  hospitalsByPlan: Array<{ plan: string; count: number }>
+  recentSignups: Array<{ id: string; name: string; code: string; subscriptionStatus: string; createdAt: string }>
+}

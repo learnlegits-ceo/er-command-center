@@ -12,12 +12,12 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True)  # NULL only for platform_admin role
     employee_id = Column(String(50))
     email = Column(String(255), nullable=False)
     password_hash = Column(String(255), nullable=False)
     name = Column(String(255), nullable=False)
-    role = Column(String(20), nullable=False)  # nurse, doctor, admin, technician, receptionist
+    role = Column(String(20), nullable=False)  # platform_admin, admin, nurse, doctor, technician, receptionist
     department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id"))
     phone = Column(String(20))
     avatar_url = Column(Text)

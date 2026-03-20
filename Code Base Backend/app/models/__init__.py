@@ -11,10 +11,20 @@ from .notification import Notification, SQSMessage
 from .file_upload import FileUpload
 from .audit import AuditLog
 from .config import GroqConfiguration, MCPConfiguration, FHIRSyncLog, DashboardStatsCache
+from .subscription import SubscriptionPlan
+from .bed_pricing import BedTypePricing
+from .usage import UsageRecord
+from .billing import Invoice, Payment
 
 __all__ = [
     # Tenant
     "Tenant",
+    # Subscription & Billing
+    "SubscriptionPlan",
+    "BedTypePricing",
+    "UsageRecord",
+    "Invoice",
+    "Payment",
     # User
     "User",
     "UserSettings",

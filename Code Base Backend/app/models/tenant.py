@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Integer, Text
+from sqlalchemy import Column, String, Boolean, Integer, Text, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 import uuid
@@ -19,14 +19,22 @@ class Tenant(Base, TimestampMixin):
     address = Column(Text)
     phone = Column(String(20))
     email = Column(String(255))
-    subscription_plan = Column(String(50), default="basic")
-    subscription_status = Column(String(20), default="active")
+
+    # Subscription — linked to SubscriptionPlan
+    plan_id = Column(UUID(as_uuid=True), ForeignKey("subscription_plans.id"), nullable=True)
+    subscription_plan = Column(String(50), default="basic")  # legacy field kept for backward compat
+    subscription_status = Column(String(20), default="active")  # active, inactive, suspended
+    subscription_starts_at = Column(DateTime(timezone=True))
+    subscription_ends_at = Column(DateTime(timezone=True))
+    trial_ends_at = Column(DateTime(timezone=True))
+
     max_users = Column(Integer, default=50)
     max_beds = Column(Integer, default=100)
     settings = Column(JSONB, default={})
     is_active = Column(Boolean, default=True)
 
     # Relationships
+    plan = relationship("SubscriptionPlan", back_populates="tenants")
     departments = relationship("Department", back_populates="tenant", lazy="dynamic")
     users = relationship("User", back_populates="tenant", lazy="dynamic")
     patients = relationship("Patient", back_populates="tenant", lazy="dynamic")

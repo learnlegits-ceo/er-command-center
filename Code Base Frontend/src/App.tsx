@@ -13,6 +13,13 @@ import ForgotPassword from '@/pages/ForgotPassword'
 import Alerts from '@/pages/Alerts'
 import Profile from '@/pages/Profile'
 import Settings from '@/pages/Settings'
+import PlatformDashboard from '@/pages/platform/PlatformDashboard'
+import PlatformHospitals from '@/pages/platform/PlatformHospitals'
+import HospitalOnboarding from '@/pages/platform/HospitalOnboarding'
+import HospitalDetail from '@/pages/platform/HospitalDetail'
+import PlatformPlans from '@/pages/platform/PlatformPlans'
+import PlatformBilling from '@/pages/platform/PlatformBilling'
+import PlatformTeam from '@/pages/platform/PlatformTeam'
 import './App.css'
 
 // Wrappers that key by route param to force full remount on department change
@@ -68,6 +75,16 @@ function App() {
         <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
         <Route path="/resources" element={<ProtectedRoute><Layout><div>Resources Page (Coming Soon)</div></Layout></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute><Layout><Admin /></Layout></ProtectedRoute>} />
+
+        {/* Platform admin routes */}
+        <Route path="/platform" element={<ProtectedRoute><Layout><PlatformDashboard /></Layout></ProtectedRoute>} />
+        <Route path="/platform/hospitals" element={<ProtectedRoute><Layout><PlatformHospitals /></Layout></ProtectedRoute>} />
+        <Route path="/platform/hospitals/new" element={<ProtectedRoute><Layout><HospitalOnboarding /></Layout></ProtectedRoute>} />
+        <Route path="/platform/hospitals/:id" element={<ProtectedRoute><Layout><HospitalDetail /></Layout></ProtectedRoute>} />
+        <Route path="/platform/plans" element={<ProtectedRoute><Layout><PlatformPlans /></Layout></ProtectedRoute>} />
+        <Route path="/platform/billing" element={<ProtectedRoute><Layout><PlatformBilling /></Layout></ProtectedRoute>} />
+        <Route path="/platform/team" element={<ProtectedRoute><Layout><PlatformTeam /></Layout></ProtectedRoute>} />
+
         <Route path="*" element={<div className="flex items-center justify-center min-h-screen">404 - Page Not Found</div>} />
       </Routes>
       </ErrorBoundary>

@@ -53,11 +53,23 @@ export function DashboardHeader({
     document.documentElement.classList.toggle('dark');
   };
 
-  const roleColors = {
+  const roleColors: Record<string, string> = {
     Doctor: 'bg-primary/10 text-primary',
     Nurse: 'bg-green-500/10 text-green-700',
     Admin: 'bg-purple-500/10 text-purple-700',
+    'Platform admin': 'bg-amber-500/10 text-amber-700',
   };
+
+  const isPlatformAdmin = user?.role === 'platform_admin';
+
+  // Platform admin navigation
+  const platformNavItems = [
+    { label: 'Dashboard', path: '/platform', icon: Activity },
+    { label: 'Hospitals', path: '/platform/hospitals', icon: Building2 },
+    { label: 'Plans', path: '/platform/plans', icon: Stethoscope },
+    { label: 'Billing', path: '/platform/billing', icon: Activity },
+    { label: 'Team', path: '/platform/team', icon: UserCog },
+  ];
 
   return (
     <header className="h-14 border-b border-border bg-card px-4 flex items-center justify-between sticky top-0 z-50">
@@ -67,8 +79,16 @@ export function DashboardHeader({
             <span className="text-primary-foreground font-bold text-sm">+</span>
           </div>
           <div>
-            <h1 className="text-sm font-semibold text-foreground leading-none">{hospitalName}</h1>
+            <h1 className="text-sm font-semibold text-foreground leading-none">
+              {isPlatformAdmin ? 'ER Command Center' : hospitalName}
+            </h1>
 
+            {isPlatformAdmin ? (
+              <span className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                <Building2 className="w-3 h-3" />
+                Platform Administration
+              </span>
+            ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5 hover:text-foreground transition-colors">
@@ -181,8 +201,27 @@ export function DashboardHeader({
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>
+            )}
           </div>
         </div>
+
+        {/* Platform admin nav tabs */}
+        {isPlatformAdmin && (
+          <div className="flex items-center gap-1 ml-2">
+            {platformNavItems.map((item) => (
+              <Button
+                key={item.path}
+                variant={window.location.pathname === item.path || window.location.pathname.startsWith(item.path + '/') ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-7 text-xs gap-1.5"
+                onClick={() => navigate(item.path)}
+              >
+                <item.icon className="w-3.5 h-3.5" />
+                {item.label}
+              </Button>
+            ))}
+          </div>
+        )}
 
         <div className="h-6 w-px bg-border" />
 

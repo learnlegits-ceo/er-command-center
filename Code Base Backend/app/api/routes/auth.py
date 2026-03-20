@@ -78,7 +78,7 @@ async def login(
         # Create tokens
         token_data = {
             "sub": str(user.id),
-            "tenant_id": str(user.tenant_id),
+            "tenant_id": str(user.tenant_id) if user.tenant_id else None,
             "role": user.role
         }
 
@@ -399,7 +399,7 @@ async def refresh_token(
 
         token_data = {
             "sub": str(user.id),
-            "tenant_id": str(user.tenant_id),
+            "tenant_id": str(user.tenant_id) if user.tenant_id else None,
             "role": user.role
         }
 

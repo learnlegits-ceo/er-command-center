@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useUser, UserRole } from '@/contexts/UserContext'
 import { endpoints } from '@/lib/api'
 import { getDefaultAvatar } from '@/lib/utils'
+import { useBedPricing, useSetBedPricing, useUsageStats, useCurrentBilling } from '@/hooks/useBilling'
 
 interface StaffMember {
   id: string
@@ -70,9 +71,206 @@ interface PoliceCase {
   resolution?: string
 }
 
+// ─── Bed Pricing Sub-Tab Component ──────────────────────────────────────────
+
+function BedPricingTab() {
+  const [editType, setEditType] = useState<string | null>(null)
+  const [editCost, setEditCost] = useState('')
+  const { data: pricing, isLoading } = useBedPricing()
+  const setBedPricingMut = useSetBedPricing()
+
+  const handleSave = async (bedType: string) => {
+    const cost = parseFloat(editCost)
+    if (isNaN(cost) || cost < 0) return
+    try {
+      await setBedPricingMut.mutateAsync({ bed_type: bedType, cost_per_day: cost })
+      setEditType(null)
+      setEditCost('')
+    } catch { /* toast handled by mutation */ }
+  }
+
+  if (isLoading) return <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin" /></div>
+
+  return (
+    <div className="p-4 space-y-4">
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <h3 className="text-lg font-semibold">Bed Pricing</h3>
+          <p className="text-xs text-muted-foreground">Set cost per day for each bed type in your hospital</p>
+        </div>
+      </div>
+      <table className="w-full">
+        <thead>
+          <tr className="border-b">
+            <th className="text-left p-3 text-xs font-medium text-muted-foreground">Bed Type</th>
+            <th className="text-left p-3 text-xs font-medium text-muted-foreground">Cost/Day (INR)</th>
+            <th className="text-left p-3 text-xs font-medium text-muted-foreground">Status</th>
+            <th className="text-left p-3 text-xs font-medium text-muted-foreground">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(pricing || []).map((p: any) => (
+            <tr key={p.bed_type} className="border-b last:border-0">
+              <td className="p-3 text-sm font-medium capitalize">{p.bed_type}</td>
+              <td className="p-3 text-sm">
+                {editType === p.bed_type ? (
+                  <input
+                    type="number"
+                    value={editCost}
+                    onChange={(e) => setEditCost(e.target.value)}
+                    className="w-32 px-2 py-1 border rounded text-sm"
+                    autoFocus
+                    onKeyDown={(e) => e.key === 'Enter' && handleSave(p.bed_type)}
+                  />
+                ) : (
+                  p.cost_per_day > 0 ? `₹${p.cost_per_day.toLocaleString()}` : '—'
+                )}
+              </td>
+              <td className="p-3">
+                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                  p.status === 'configured' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {p.status === 'configured' ? 'Configured' : 'Not Set'}
+                </span>
+              </td>
+              <td className="p-3">
+                {editType === p.bed_type ? (
+                  <div className="flex gap-1">
+                    <Button size="sm" className="h-7 text-xs" onClick={() => handleSave(p.bed_type)} disabled={setBedPricingMut.isPending}>Save</Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditType(null)}>Cancel</Button>
+                  </div>
+                ) : (
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditType(p.bed_type); setEditCost(p.cost_per_day > 0 ? String(p.cost_per_day) : '') }}>
+                    <Edit2 className="w-3 h-3 mr-1" /> {p.status === 'configured' ? 'Edit' : 'Set Price'}
+                  </Button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ─── Usage & Billing Sub-Tab Component ──────────────────────────────────────
+
+function UsageBillingTab() {
+  const { data: usage, isLoading: usageLoading } = useUsageStats()
+  const { data: billing, isLoading: billingLoading } = useCurrentBilling()
+
+  if (usageLoading || billingLoading) return <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin" /></div>
+
+  const plan = billing?.plan
+  const invoices = billing?.invoices || []
+
+  return (
+    <div className="p-4 space-y-6">
+      {/* Current Plan */}
+      {plan && (
+        <div className="p-4 bg-muted/50 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground">Current Plan</p>
+              <p className="text-lg font-bold">{plan.name}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold">₹{plan.base_price.toLocaleString()}<span className="text-sm font-normal">/mo</span></p>
+            </div>
+          </div>
+          <div className="flex gap-6 mt-2 text-xs text-muted-foreground">
+            <span>{plan.included_users} users included</span>
+            <span>{plan.included_beds} beds included</span>
+            <span>₹{plan.price_per_extra_user}/extra user</span>
+            <span>₹{plan.price_per_extra_bed}/extra bed</span>
+          </div>
+        </div>
+      )}
+
+      {/* Usage Meters */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">Current Usage</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            { label: 'Users', current: usage?.active_users || 0, max: usage?.plan_limit?.max_users || 0, included: usage?.plan_limit?.included_users || 0 },
+            { label: 'Beds', current: usage?.total_beds || 0, max: usage?.plan_limit?.max_beds || 0, included: usage?.plan_limit?.included_beds || 0 },
+            { label: 'Occupied Beds', current: usage?.occupied_beds || 0, max: usage?.total_beds || 1, included: 0 },
+          ].map((meter) => (
+            <div key={meter.label} className="p-3 border rounded-lg">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-muted-foreground">{meter.label}</span>
+                <span className="text-sm font-bold">
+                  {meter.current}
+                  {meter.max > 0 && <span className="font-normal text-muted-foreground"> / {meter.max}</span>}
+                  {meter.max === 0 && meter.label !== 'Occupied Beds' && <span className="font-normal text-muted-foreground"> / ∞</span>}
+                </span>
+              </div>
+              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    meter.max > 0 && meter.current / meter.max > 0.9 ? 'bg-red-500' : 'bg-primary'
+                  }`}
+                  style={{ width: `${meter.max > 0 ? Math.min(100, (meter.current / meter.max) * 100) : 30}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Billing History */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold">Billing History</h3>
+          {billing?.outstanding_amount > 0 && (
+            <span className="text-xs text-orange-600 font-medium">₹{billing.outstanding_amount.toLocaleString()} outstanding</span>
+          )}
+        </div>
+        {invoices.length > 0 ? (
+          <table className="w-full">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left p-2 text-xs font-medium text-muted-foreground">Invoice</th>
+                <th className="text-left p-2 text-xs font-medium text-muted-foreground">Period</th>
+                <th className="text-left p-2 text-xs font-medium text-muted-foreground">Amount</th>
+                <th className="text-left p-2 text-xs font-medium text-muted-foreground">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.map((inv: any) => (
+                <tr key={inv.id} className="border-b last:border-0">
+                  <td className="p-2 text-sm font-mono">{inv.invoice_number}</td>
+                  <td className="p-2 text-sm text-muted-foreground">
+                    {inv.period_start ? new Date(inv.period_start).toLocaleDateString() : ''} — {inv.period_end ? new Date(inv.period_end).toLocaleDateString() : ''}
+                  </td>
+                  <td className="p-2 text-sm font-medium">₹{inv.total_amount?.toLocaleString()}</td>
+                  <td className="p-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      inv.status === 'paid' ? 'bg-green-50 text-green-700' :
+                      inv.status === 'overdue' ? 'bg-red-50 text-red-700' :
+                      inv.status === 'sent' ? 'bg-blue-50 text-blue-700' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      {inv.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-4">No invoices yet</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Admin Component ──────────────────────────────────────────────────
+
 export default function Admin() {
   const { user, canManageUsers } = useUser()
-  const [activeAdminTab, setActiveAdminTab] = useState<'staff' | 'police' | 'audit'>('staff')
+  const [activeAdminTab, setActiveAdminTab] = useState<'staff' | 'police' | 'audit' | 'bed-pricing' | 'usage-billing'>('staff')
 
   // Staff state
   const [staff, setStaff] = useState<StaffMember[]>([])
@@ -466,6 +664,28 @@ export default function Admin() {
         >
           <FileText className="w-4 h-4" />
           Audit Log
+        </button>
+        <button
+          onClick={() => setActiveAdminTab('bed-pricing')}
+          className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
+            activeAdminTab === 'bed-pricing'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Syringe className="w-4 h-4" />
+          Bed Pricing
+        </button>
+        <button
+          onClick={() => setActiveAdminTab('usage-billing')}
+          className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
+            activeAdminTab === 'usage-billing'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Shield className="w-4 h-4" />
+          Usage & Billing
         </button>
       </div>
 
@@ -1234,6 +1454,16 @@ export default function Admin() {
             <div className="text-center py-12 text-muted-foreground">No audit log entries found.</div>
           )}
         </div>
+      )}
+
+      {/* ── BED PRICING TAB ── */}
+      {activeAdminTab === 'bed-pricing' && (
+        <BedPricingTab />
+      )}
+
+      {/* ── USAGE & BILLING TAB ── */}
+      {activeAdminTab === 'usage-billing' && (
+        <UsageBillingTab />
       )}
 
       {/* Contact Police Modal */}

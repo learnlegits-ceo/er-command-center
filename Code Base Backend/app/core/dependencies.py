@@ -116,6 +116,7 @@ def require_roles(*allowed_roles: str):
 
 
 # Pre-defined role dependencies
+require_platform_admin = require_roles("platform_admin")
 require_admin = require_roles("admin")
 require_doctor = require_roles("doctor")
 require_nurse_or_doctor = require_roles("nurse", "doctor")
@@ -133,7 +134,12 @@ class TenantContext:
 async def get_tenant_context(
     current_user: User = Depends(get_current_user)
 ) -> TenantContext:
-    """Get tenant context from current user."""
+    """Get tenant context from current user. Platform admins have no tenant."""
+    if current_user.role == "platform_admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Platform admin does not belong to a specific hospital. Use platform routes instead."
+        )
     return TenantContext(tenant_id=current_user.tenant_id)
 
 

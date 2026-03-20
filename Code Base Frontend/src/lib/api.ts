@@ -173,6 +173,54 @@ export const endpoints = {
     resetPassword: (id: string) => api.post(`/admin/staff/${id}/reset-password`),
     getAuditLogs: (params?: { limit?: number; offset?: number; action?: string; entity_type?: string }) =>
       api.get('/admin/audit-logs', { params }),
+    // Bed pricing
+    getBedPricing: () => api.get('/admin/bed-pricing'),
+    setBedPricing: (data: { bed_type: string; cost_per_day: number; currency?: string }) =>
+      api.post('/admin/bed-pricing', data),
+    updateBedPricing: (id: string, data: { cost_per_day?: number; is_active?: boolean }) =>
+      api.put(`/admin/bed-pricing/${id}`, data),
+    deleteBedPricing: (id: string) => api.delete(`/admin/bed-pricing/${id}`),
+    // Usage
+    getUsage: () => api.get('/admin/usage'),
+    getUsageHistory: () => api.get('/admin/usage/history'),
+  },
+
+  // Hospital billing
+  billing: {
+    getCurrent: () => api.get('/billing/current'),
+    getInvoices: () => api.get('/billing/invoices'),
+    getInvoiceDetail: (id: string) => api.get(`/billing/invoices/${id}`),
+  },
+
+  // Platform admin
+  platform: {
+    getDashboard: () => api.get('/platform/dashboard'),
+    // Hospitals
+    getHospitals: (params?: { search?: string; plan?: string; status?: string }) =>
+      api.get('/platform/hospitals', { params }),
+    getHospital: (id: string) => api.get(`/platform/hospitals/${id}`),
+    createHospital: (data: any) => api.post('/platform/hospitals', data),
+    updateHospital: (id: string, data: any) => api.put(`/platform/hospitals/${id}`, data),
+    updateHospitalStatus: (id: string, status: string) =>
+      api.patch(`/platform/hospitals/${id}/status`, { status }),
+    deleteHospital: (id: string) => api.delete(`/platform/hospitals/${id}`),
+    // Plans
+    getPlans: () => api.get('/platform/plans'),
+    createPlan: (data: any) => api.post('/platform/plans', data),
+    updatePlan: (id: string, data: any) => api.put(`/platform/plans/${id}`, data),
+    deletePlan: (id: string) => api.delete(`/platform/plans/${id}`),
+    // Team
+    getTeam: () => api.get('/platform/team'),
+    inviteTeamMember: (params: { name: string; email: string; password: string }) =>
+      api.post('/platform/team', null, { params }),
+    removeTeamMember: (id: string) => api.delete(`/platform/team/${id}`),
+    // Billing
+    getBillingOverview: () => api.get('/platform/billing/overview'),
+    getHospitalInvoices: (hospitalId: string) => api.get(`/platform/hospitals/${hospitalId}/invoices`),
+    generateInvoices: () => api.post('/platform/billing/generate-invoices'),
+    markInvoicePaid: (hospitalId: string, invoiceId: string) =>
+      api.post(`/platform/hospitals/${hospitalId}/invoices/${invoiceId}/mark-paid`),
+    getHospitalUsage: (hospitalId: string) => api.get(`/platform/hospitals/${hospitalId}/usage`),
   },
 }
 

@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from .routes import auth, users, patients, vitals, triage, notes, prescriptions, beds, alerts, police_cases, dashboard, admin, departments
+from .routes import auth, users, patients, vitals, triage, notes, prescriptions, beds, alerts, police_cases, dashboard, admin, departments, platform, billing
 
 api_router = APIRouter()
 
@@ -17,5 +17,7 @@ api_router.include_router(police_cases.router, prefix="/police-cases", tags=["Po
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
 api_router.include_router(admin.router, prefix="/admin", tags=["Admin"])
 api_router.include_router(departments.router, prefix="/departments", tags=["Departments"])
+api_router.include_router(platform.router, prefix="/platform", tags=["Platform"])
+api_router.include_router(billing.router, prefix="/billing", tags=["Billing"])
 
 __all__ = ["api_router"]

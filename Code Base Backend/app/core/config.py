@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://localhost:5173"
 
+    # Razorpay (Payment Gateway)
+    RAZORPAY_KEY_ID: str = ""
+    RAZORPAY_KEY_SECRET: str = ""
+
     # Redis (optional)
     REDIS_URL: str = ""
 

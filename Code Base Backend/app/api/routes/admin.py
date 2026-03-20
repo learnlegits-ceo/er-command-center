@@ -14,10 +14,14 @@ from app.models.department import Department
 from app.models.bed import Bed
 from app.models.patient import Patient, PatientVitals
 from app.models.audit import AuditLog
+from app.models.bed_pricing import BedTypePricing
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
+from app.schemas.bed_pricing import BedPricingCreate, BedPricingUpdate
 from app.schemas.common import SuccessResponse
 from app.core.dependencies import require_admin
 from app.core.security import get_password_hash
+from app.services.plan_limits import check_user_limit, check_bed_limit
+from app.services.usage_tracker import get_current_usage
 
 router = APIRouter()
 
@@ -117,6 +121,14 @@ async def create_staff(
     db: AsyncSession = Depends(get_db)
 ):
     """Create new staff member."""
+    # Check plan user limit
+    limit = await check_user_limit(db, current_user.tenant_id)
+    if not limit["allowed"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"User limit reached ({limit['current']}/{limit['max']}). Contact platform admin to upgrade your plan."
+        )
+
     # Check if email already exists
     existing = await db.execute(
         select(User).where(
@@ -414,6 +426,14 @@ async def initialize_beds(
     db: AsyncSession = Depends(get_db)
 ):
     """Create default beds for every department that has none. Idempotent — safe to call multiple times."""
+    # Check plan bed limit
+    limit = await check_bed_limit(db, current_user.tenant_id)
+    if not limit["allowed"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Bed limit reached ({limit['current']}/{limit['max']}). Contact platform admin to upgrade your plan."
+        )
+
     # Bed configs per department code
     BED_CONFIGS = {
         "ED-A": {"count": 15, "types": ["emergency", "trauma", "observation"]},
@@ -779,4 +799,184 @@ async def split_emergency_department(
     return {
         "success": True,
         "message": f"Split complete. Renamed ED → ED-A. Created ED-B. Moved {moved_beds} beds and {moved_patients} patients to Unit B."
+    }
+
+
+# ─── Bed Pricing (Hospital Admin) ───────────────────────────────────────────
+
+VALID_BED_TYPES = ["icu", "general", "isolation", "pediatric", "maternity", "emergency", "daycare", "observation"]
+
+
+@router.get("/bed-pricing", response_model=dict)
+async def get_bed_pricing(
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """List all bed type pricing for this hospital."""
+    result = await db.execute(
+        select(BedTypePricing).where(
+            BedTypePricing.tenant_id == current_user.tenant_id
+        ).order_by(BedTypePricing.bed_type)
+    )
+    pricing = result.scalars().all()
+
+    # Build a map of configured types
+    configured = {p.bed_type: p for p in pricing}
+
+    data = []
+    for bed_type in VALID_BED_TYPES:
+        if bed_type in configured:
+            p = configured[bed_type]
+            data.append({
+                "id": str(p.id),
+                "bed_type": p.bed_type,
+                "cost_per_day": float(p.cost_per_day),
+                "currency": p.currency,
+                "is_active": p.is_active,
+                "status": "configured",
+            })
+        else:
+            data.append({
+                "id": None,
+                "bed_type": bed_type,
+                "cost_per_day": 0,
+                "currency": "INR",
+                "is_active": False,
+                "status": "not_set",
+            })
+
+    return {"success": True, "data": data}
+
+
+@router.post("/bed-pricing", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def set_bed_pricing(
+    request: BedPricingCreate,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Set or update pricing for a bed type (upsert)."""
+    if request.bed_type not in VALID_BED_TYPES:
+        raise HTTPException(status_code=400, detail=f"Invalid bed type. Must be one of: {', '.join(VALID_BED_TYPES)}")
+
+    # Check if already exists (upsert)
+    result = await db.execute(
+        select(BedTypePricing).where(
+            BedTypePricing.tenant_id == current_user.tenant_id,
+            BedTypePricing.bed_type == request.bed_type,
+        )
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        existing.cost_per_day = request.cost_per_day
+        existing.currency = request.currency
+        existing.is_active = True
+        await db.commit()
+        return {"success": True, "data": {"id": str(existing.id)}, "message": f"Bed pricing updated for {request.bed_type}"}
+
+    pricing = BedTypePricing(
+        tenant_id=current_user.tenant_id,
+        bed_type=request.bed_type,
+        cost_per_day=request.cost_per_day,
+        currency=request.currency,
+        is_active=True,
+    )
+    db.add(pricing)
+    await db.commit()
+    return {"success": True, "data": {"id": str(pricing.id)}, "message": f"Bed pricing set for {request.bed_type}"}
+
+
+@router.put("/bed-pricing/{pricing_id}", response_model=dict)
+async def update_bed_pricing(
+    pricing_id: UUID,
+    request: BedPricingUpdate,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update bed type pricing."""
+    result = await db.execute(
+        select(BedTypePricing).where(
+            BedTypePricing.id == pricing_id,
+            BedTypePricing.tenant_id == current_user.tenant_id,
+        )
+    )
+    pricing = result.scalar_one_or_none()
+    if not pricing:
+        raise HTTPException(status_code=404, detail="Bed pricing not found")
+
+    update_data = request.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(pricing, field, value)
+
+    await db.commit()
+    return {"success": True, "message": "Bed pricing updated"}
+
+
+@router.delete("/bed-pricing/{pricing_id}", response_model=dict)
+async def delete_bed_pricing(
+    pricing_id: UUID,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Remove bed type pricing."""
+    result = await db.execute(
+        select(BedTypePricing).where(
+            BedTypePricing.id == pricing_id,
+            BedTypePricing.tenant_id == current_user.tenant_id,
+        )
+    )
+    pricing = result.scalar_one_or_none()
+    if not pricing:
+        raise HTTPException(status_code=404, detail="Bed pricing not found")
+
+    await db.delete(pricing)
+    await db.commit()
+    return {"success": True, "message": "Bed pricing removed"}
+
+
+# ─── Usage Stats (Hospital Admin) ───────────────────────────────────────────
+
+@router.get("/usage", response_model=dict)
+async def get_usage_stats(
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get current live usage stats for this hospital."""
+    usage = await get_current_usage(db, current_user.tenant_id)
+    return {"success": True, "data": usage}
+
+
+@router.get("/usage/history", response_model=dict)
+async def get_usage_history(
+    limit: int = Query(12, ge=1, le=24),
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get historical usage snapshots for this hospital."""
+    from app.models.usage import UsageRecord
+
+    result = await db.execute(
+        select(UsageRecord).where(
+            UsageRecord.tenant_id == current_user.tenant_id
+        ).order_by(UsageRecord.period_start.desc()).limit(limit)
+    )
+    records = result.scalars().all()
+
+    return {
+        "success": True,
+        "data": [
+            {
+                "id": str(r.id),
+                "period_start": r.period_start.isoformat() if r.period_start else None,
+                "period_end": r.period_end.isoformat() if r.period_end else None,
+                "active_users": r.active_users,
+                "total_beds": r.total_beds,
+                "occupied_beds_avg": r.occupied_beds_avg,
+                "patients_admitted": r.patients_admitted,
+                "patients_discharged": r.patients_discharged,
+                "ai_triage_calls": r.ai_triage_calls,
+                "computed_amount": float(r.computed_amount) if r.computed_amount else 0,
+            }
+            for r in records
+        ]
     }
