@@ -73,7 +73,7 @@ class Payment(Base, TimestampMixin):
 
     status = Column(String(20), default="pending")  # pending, completed, failed, refunded
     paid_at = Column(DateTime(timezone=True))
-    metadata = Column(JSONB, default={})
+    payment_metadata = Column("metadata", JSONB, default={})
 
     # Relationships
     tenant = relationship("Tenant")
