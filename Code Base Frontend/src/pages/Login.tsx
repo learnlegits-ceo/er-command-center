@@ -154,8 +154,7 @@ export default function Login() {
 
         {/* Demo Credentials */}
         <div className="mt-6 bg-card rounded-lg border border-border p-4">
-          <p className="text-sm font-medium text-foreground mb-3">Demo Credentials (requires demo data loaded):</p>
-          <p className="text-xs text-muted-foreground mb-3">Make sure to run demo_health.sql to create these users</p>
+          <p className="text-sm font-medium text-foreground mb-3">Demo Credentials:</p>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
