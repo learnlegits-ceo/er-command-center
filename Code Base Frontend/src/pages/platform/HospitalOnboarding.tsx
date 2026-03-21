@@ -8,14 +8,12 @@ import { Label } from '@/components/ui/label'
 import { useCreateHospital, usePlans } from '@/hooks/usePlatform'
 import { useUser } from '@/contexts/UserContext'
 import { Navigate } from 'react-router-dom'
-import { useToast } from '@/hooks/use-toast'
 
 const STEPS = ['Hospital Profile', 'Select Plan', 'Admin User', 'Review & Confirm']
 
 export default function HospitalOnboarding() {
   const { isPlatformAdmin } = useUser()
   const navigate = useNavigate()
-  const { toast } = useToast()
   const { data: plans } = usePlans()
   const createHospital = useCreateHospital()
   const [step, setStep] = useState(0)
@@ -53,10 +51,10 @@ export default function HospitalOnboarding() {
           phone: form.admin_phone || undefined,
         },
       })
-      toast({ title: 'Hospital onboarded successfully' })
+      alert('Hospital onboarded successfully!')
       navigate('/platform/hospitals')
     } catch (err: any) {
-      toast({ title: 'Error', description: err.response?.data?.detail || 'Failed to create hospital', variant: 'destructive' })
+      alert(err.response?.data?.detail || 'Failed to create hospital')
     }
   }
 

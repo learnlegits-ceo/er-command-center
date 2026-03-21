@@ -4,13 +4,11 @@ import { Button } from '@/components/ui/button'
 import { usePlatformBillingOverview, useGenerateInvoices } from '@/hooks/usePlatform'
 import { useUser } from '@/contexts/UserContext'
 import { Navigate } from 'react-router-dom'
-import { useToast } from '@/hooks/use-toast'
 
 export default function PlatformBilling() {
   const { isPlatformAdmin } = useUser()
   const { data, isLoading } = usePlatformBillingOverview()
   const generateInvoices = useGenerateInvoices()
-  const { toast } = useToast()
 
   if (!isPlatformAdmin) return <Navigate to="/dashboard" replace />
 
@@ -18,9 +16,9 @@ export default function PlatformBilling() {
     try {
       const res = await generateInvoices.mutateAsync()
       const result = res.data?.data
-      toast({ title: `Generated ${result?.generated || 0} invoices. ${result?.skipped || 0} already existed.` })
+      alert(`Generated ${result?.generated || 0} invoices. ${result?.skipped || 0} already existed.`)
     } catch (err: any) {
-      toast({ title: 'Error', description: err.response?.data?.detail || 'Failed', variant: 'destructive' })
+      alert(err.response?.data?.detail || 'Failed')
     }
   }
 

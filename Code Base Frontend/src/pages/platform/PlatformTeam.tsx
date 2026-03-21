@@ -8,14 +8,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { usePlatformTeam, useInviteTeamMember, useRemoveTeamMember } from '@/hooks/usePlatform'
 import { useUser } from '@/contexts/UserContext'
 import { Navigate } from 'react-router-dom'
-import { useToast } from '@/hooks/use-toast'
 
 export default function PlatformTeam() {
   const { isPlatformAdmin, user } = useUser()
   const { data: team, isLoading } = usePlatformTeam()
   const inviteMember = useInviteTeamMember()
   const removeMember = useRemoveTeamMember()
-  const { toast } = useToast()
   const [showInvite, setShowInvite] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', password: '' })
 
@@ -24,11 +22,11 @@ export default function PlatformTeam() {
   const handleInvite = async () => {
     try {
       await inviteMember.mutateAsync(form)
-      toast({ title: 'Team member invited' })
+      alert('Team member invited!')
       setShowInvite(false)
       setForm({ name: '', email: '', password: '' })
     } catch (err: any) {
-      toast({ title: 'Error', description: err.response?.data?.detail || 'Failed', variant: 'destructive' })
+      alert(err.response?.data?.detail || 'Failed')
     }
   }
 
@@ -36,9 +34,9 @@ export default function PlatformTeam() {
     if (!confirm('Remove this team member?')) return
     try {
       await removeMember.mutateAsync(id)
-      toast({ title: 'Team member removed' })
+      alert('Team member removed')
     } catch (err: any) {
-      toast({ title: 'Error', description: err.response?.data?.detail || 'Failed', variant: 'destructive' })
+      alert(err.response?.data?.detail || 'Failed')
     }
   }
 

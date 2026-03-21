@@ -8,14 +8,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { usePlans, useCreatePlan, useUpdatePlan } from '@/hooks/usePlatform'
 import { useUser } from '@/contexts/UserContext'
 import { Navigate } from 'react-router-dom'
-import { useToast } from '@/hooks/use-toast'
-
 export default function PlatformPlans() {
   const { isPlatformAdmin } = useUser()
   const { data: plans, isLoading } = usePlans()
   const createPlan = useCreatePlan()
   const updatePlan = useUpdatePlan()
-  const { toast } = useToast()
   const [editingPlan, setEditingPlan] = useState<any>(null)
   const [showCreate, setShowCreate] = useState(false)
 
@@ -33,11 +30,11 @@ export default function PlatformPlans() {
   const handleCreate = async () => {
     try {
       await createPlan.mutateAsync(form)
-      toast({ title: 'Plan created' })
+      alert('Plan created!')
       setShowCreate(false)
       setForm({ name: '', code: '', description: '', included_users: 10, included_beds: 20, max_users: 20, max_beds: 50, max_departments: 5, base_price: 9999, price_per_extra_user: 299, price_per_extra_bed: 499 })
     } catch (err: any) {
-      toast({ title: 'Error', description: err.response?.data?.detail || 'Failed', variant: 'destructive' })
+      alert(err.response?.data?.detail || 'Failed')
     }
   }
 
