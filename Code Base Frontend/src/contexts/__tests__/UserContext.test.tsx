@@ -146,6 +146,77 @@ describe('UserContext', () => {
     expect(result.current.canDischarge).toBe(true)
   })
 
+  it('computes platform_admin permissions correctly', async () => {
+    setupUserInStorage({
+      id: '4', name: 'Platform Admin', role: 'platform_admin', avatar: '/avatar.png',
+    })
+
+    const { endpoints } = await import('@/lib/api')
+    vi.mocked(endpoints.auth.getCurrentUser).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: { id: '4', name: 'Platform Admin', role: 'platform_admin', avatar: null, department: null },
+      },
+    } as any)
+
+    const { result } = renderHook(() => useUser(), { wrapper })
+
+    await waitFor(() => {
+      expect(result.current.user).not.toBeNull()
+    })
+
+    // Platform admin specific
+    expect(result.current.isPlatformAdmin).toBe(true)
+    expect(result.current.canAccessPlatform).toBe(true)
+    expect(result.current.canViewBilling).toBe(true)
+
+    // Should NOT have hospital-level permissions
+    expect(result.current.canManageUsers).toBe(false)
+    expect(result.current.canAccessAdmin).toBe(false)
+    expect(result.current.canRegisterPatients).toBe(false)
+    expect(result.current.canPrescribe).toBe(false)
+    expect(result.current.canTriage).toBe(false)
+  })
+
+  it('non-platform roles should not have platform access', async () => {
+    setupUserInStorage({
+      id: '1', name: 'Test Nurse', role: 'nurse', avatar: '/avatar.png',
+    })
+
+    const { result } = renderHook(() => useUser(), { wrapper })
+
+    await waitFor(() => {
+      expect(result.current.user).not.toBeNull()
+    })
+
+    expect(result.current.isPlatformAdmin).toBe(false)
+    expect(result.current.canAccessPlatform).toBe(false)
+  })
+
+  it('admin has billing access but not platform access', async () => {
+    setupUserInStorage({
+      id: '3', name: 'Test Admin', role: 'admin', avatar: '/avatar.png',
+    })
+
+    const { endpoints } = await import('@/lib/api')
+    vi.mocked(endpoints.auth.getCurrentUser).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: { id: '3', name: 'Test Admin', role: 'admin', avatar: null, department: 'ED' },
+      },
+    } as any)
+
+    const { result } = renderHook(() => useUser(), { wrapper })
+
+    await waitFor(() => {
+      expect(result.current.user).not.toBeNull()
+    })
+
+    expect(result.current.canViewBilling).toBe(true)
+    expect(result.current.isPlatformAdmin).toBe(false)
+    expect(result.current.canAccessPlatform).toBe(false)
+  })
+
   it('clears tokens on logout (setUser null)', async () => {
     setupUserInStorage({
       id: '1', name: 'Test', role: 'nurse', avatar: '/a.png',

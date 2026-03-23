@@ -238,6 +238,145 @@ async def admin_headers(client: AsyncClient, admin_user):
 
 
 @pytest.fixture
+async def platform_admin_user(db_session: AsyncSession):
+    """Create a platform_admin user (no tenant)."""
+    from app.models.user import User
+
+    user = User(
+        id=uuid.uuid4(),
+        tenant_id=None,
+        email="platform@test.com",
+        password_hash=PASSWORD_HASH,
+        name="Platform Admin",
+        role="platform_admin",
+        status="active",
+    )
+    db_session.add(user)
+    await db_session.flush()
+    return user
+
+
+@pytest.fixture
+async def platform_headers(client: AsyncClient, platform_admin_user):
+    return await _login(client, platform_admin_user.email)
+
+
+@pytest.fixture
+async def test_plan(db_session: AsyncSession):
+    """Create a test subscription plan."""
+    from app.models.subscription import SubscriptionPlan
+
+    plan = SubscriptionPlan(
+        id=uuid.uuid4(),
+        name="Test Starter",
+        code="test-starter",
+        description="Test plan",
+        included_users=2,
+        included_beds=5,
+        max_users=3,
+        max_beds=10,
+        max_departments=2,
+        base_price=9999,
+        price_per_extra_user=299,
+        price_per_extra_bed=499,
+        currency="INR",
+        features={"ai_triage": True, "ai_triage_limit": 100, "police_cases": False, "opd": False},
+        is_active=True,
+        sort_order=1,
+    )
+    db_session.add(plan)
+    await db_session.flush()
+    return plan
+
+
+@pytest.fixture
+async def test_plan_enterprise(db_session: AsyncSession):
+    """Create an unlimited enterprise plan."""
+    from app.models.subscription import SubscriptionPlan
+
+    plan = SubscriptionPlan(
+        id=uuid.uuid4(),
+        name="Test Enterprise",
+        code="test-enterprise",
+        max_users=0,
+        max_beds=0,
+        max_departments=0,
+        included_users=0,
+        included_beds=0,
+        base_price=59999,
+        price_per_extra_user=199,
+        price_per_extra_bed=299,
+        currency="INR",
+        features={"ai_triage": True, "ai_triage_limit": 0, "police_cases": True, "opd": True},
+        is_active=True,
+        sort_order=3,
+    )
+    db_session.add(plan)
+    await db_session.flush()
+    return plan
+
+
+@pytest.fixture
+async def tenant_with_plan(db_session: AsyncSession, test_plan):
+    """Create a tenant linked to a plan with tight limits."""
+    from app.models.tenant import Tenant
+    from datetime import datetime
+
+    tenant = Tenant(
+        id=uuid.uuid4(),
+        name="Limited Hospital",
+        code="LIM001",
+        plan_id=test_plan.id,
+        subscription_plan="test-starter",
+        subscription_status="active",
+        subscription_starts_at=datetime.utcnow(),
+        max_users=test_plan.max_users,
+        max_beds=test_plan.max_beds,
+        is_active=True,
+    )
+    db_session.add(tenant)
+    await db_session.flush()
+    return tenant
+
+
+@pytest.fixture
+async def admin_of_limited_tenant(db_session: AsyncSession, tenant_with_plan, test_department):
+    """Admin user belonging to a tenant with tight plan limits."""
+    from app.models.user import User
+    from app.models.department import Department
+
+    # Create a department for this tenant
+    dept = Department(
+        id=uuid.uuid4(),
+        tenant_id=tenant_with_plan.id,
+        name="Emergency Department",
+        code="ED",
+        capacity=10,
+    )
+    db_session.add(dept)
+    await db_session.flush()
+
+    user = User(
+        id=uuid.uuid4(),
+        tenant_id=tenant_with_plan.id,
+        email="limitedadmin@test.com",
+        password_hash=PASSWORD_HASH,
+        name="Limited Admin",
+        role="admin",
+        department_id=dept.id,
+        status="active",
+    )
+    db_session.add(user)
+    await db_session.flush()
+    return user
+
+
+@pytest.fixture
+async def limited_admin_headers(client: AsyncClient, admin_of_limited_tenant):
+    return await _login(client, admin_of_limited_tenant.email)
+
+
+@pytest.fixture
 async def test_bed(db_session: AsyncSession, test_tenant, test_department):
     """Create a test bed."""
     from app.models.bed import Bed
