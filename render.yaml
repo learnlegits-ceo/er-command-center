@@ -67,3 +67,14 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
+
+  # ----------------------------------------------------------
+  # MARKETING SITE - Static HTML/CSS/JS Landing Page
+  # ----------------------------------------------------------
+  - type: web
+    name: er-marketing
+    env: static
+    plan: free
+    rootDir: Marketing Site
+    buildCommand: echo "No build needed"
+    staticPublishPath: .
