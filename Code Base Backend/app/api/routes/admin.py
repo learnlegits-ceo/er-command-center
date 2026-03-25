@@ -308,8 +308,7 @@ async def reset_staff_password(
 
     await db.commit()
 
-    # TODO: Send password reset email via SQS/Resend — never log the temporary password
-    print(f"[ADMIN] Password reset for {user.email} — temporary password generated and hashed.")
+    # TODO: Send password reset email via SQS/Resend
 
     return {"success": True, "message": "Password has been reset. Please notify the staff member directly through a secure channel."}
 

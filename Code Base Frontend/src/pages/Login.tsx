@@ -42,6 +42,7 @@ export default function Login() {
         setUser({
           id: user.id,
           name: user.name,
+          email: user.email,
           role: user.role as UserRole,
           avatar: user.avatar || getDefaultAvatar(user.name, user.role),
           department: user.department || 'General'

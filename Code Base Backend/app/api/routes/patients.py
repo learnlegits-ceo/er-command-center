@@ -497,7 +497,7 @@ async def create_patient(
     # Add initial vitals if provided
     vitals_dict = None
     if request.vitals:
-        initial_vitals_ts = datetime.utcnow().isoformat() + "Z"
+        initial_vitals_ts = datetime.utcnow()
         vitals = PatientVitals(
             patient_id=patient.id,
             heart_rate=int(request.vitals.hr) if request.vitals.hr else None,
@@ -559,9 +559,9 @@ async def create_patient(
         processing_time_ms=triage_result.get("processing_time_ms"),
         temperature=triage_result.get("temperature"),
         is_applied=True,
-        applied_at=datetime.utcnow().isoformat() + "Z",
+        applied_at=datetime.utcnow(),
         applied_by=current_user.id,
-        created_at=datetime.utcnow().isoformat() + "Z"
+        created_at=datetime.utcnow()
     )
     db.add(triage_record)
 
@@ -592,7 +592,7 @@ async def create_patient(
     if assigned_bed:
         assigned_bed.status = "occupied"
         assigned_bed.current_patient_id = patient.id
-        assigned_bed.assigned_at = datetime.utcnow().isoformat() + "Z"
+        assigned_bed.assigned_at = datetime.utcnow()
         patient.bed_id = assigned_bed.id
 
         # Create bed assignment record
@@ -771,9 +771,9 @@ async def update_patient(
                 processing_time_ms=triage_result.get("processing_time_ms"),
                 temperature=triage_result.get("temperature"),
                 is_applied=True,
-                applied_at=datetime.utcnow().isoformat() + "Z",
+                applied_at=datetime.utcnow(),
                 applied_by=current_user.id,
-                created_at=datetime.utcnow().isoformat() + "Z"
+                created_at=datetime.utcnow()
             )
             db.add(triage_record)
             await db.commit()
@@ -996,7 +996,7 @@ async def transfer_patient_to_opd(
                 "id": str(patient.id),
                 "status": "transferred_to_opd",
                 "department": opd_dept.name if opd_dept else "OPD",
-                "transferredAt": datetime.utcnow().isoformat() + "Z",
+                "transferredAt": datetime.utcnow().isoformat(),
                 "transferredBy": current_user.name,
                 "message": "Patient transferred to OPD successfully."
             }
@@ -1093,9 +1093,9 @@ async def run_patient_triage(
         processing_time_ms=triage_result.get("processing_time_ms"),
         temperature=triage_result.get("temperature"),
         is_applied=True,
-        applied_at=datetime.utcnow().isoformat() + "Z",
+        applied_at=datetime.utcnow(),
         applied_by=current_user.id,
-        created_at=datetime.utcnow().isoformat() + "Z"
+        created_at=datetime.utcnow()
     )
     db.add(triage_record)
 
@@ -1199,9 +1199,9 @@ async def batch_triage_patients(
             groq_model=triage_result.get("groq_model"),
             processing_time_ms=triage_result.get("processing_time_ms"),
             is_applied=True,
-            applied_at=datetime.utcnow().isoformat() + "Z",
+            applied_at=datetime.utcnow(),
             applied_by=current_user.id,
-            created_at=datetime.utcnow().isoformat() + "Z"
+            created_at=datetime.utcnow()
         )
         db.add(triage_record)
         triaged_count += 1
@@ -1314,7 +1314,7 @@ async def add_patient_vitals(
     old_priority = patient.priority  # Track for alert on priority change
 
     # Create vitals record
-    now_iso = datetime.utcnow().isoformat() + "Z"
+    now_ts = datetime.utcnow()
     vitals = PatientVitals(
         patient_id=patient.id,
         heart_rate=int(vitals_input.get("hr")) if vitals_input.get("hr") else None,
@@ -1323,8 +1323,8 @@ async def add_patient_vitals(
         temperature=float(vitals_input.get("temp")) if vitals_input.get("temp") else None,
         respiratory_rate=int(vitals_input.get("rr")) if vitals_input.get("rr") else None,
         recorded_by=current_user.id,
-        recorded_at=now_iso,
-        created_at=now_iso,
+        recorded_at=now_ts,
+        created_at=now_ts,
         source=vitals_input.get("source", "manual")
     )
     db.add(vitals)
@@ -1361,8 +1361,6 @@ async def add_patient_vitals(
         except Exception:
             pass
 
-        print(f"[TRIAGE] Re-triage for patient {patient_id}: vitals={vitals_dict}, treatments={len(current_treatments)}")
-
         triage_service = TriageService()
         triage_result = await triage_service.run_triage(
             complaint=patient_complaint,
@@ -1372,8 +1370,6 @@ async def add_patient_vitals(
             history=patient_history,
             treatments=current_treatments
         )
-
-        print(f"[TRIAGE] Result: priority={triage_result.get('priority')}, reasoning={triage_result.get('reasoning', '')[:80]}")
 
         # Update patient priority
         patient_reload = await db.execute(
@@ -1426,9 +1422,8 @@ async def add_patient_vitals(
             "estimatedWaitTime": triage_result.get("estimated_wait_time"),
         }
     except Exception as e:
-        import traceback
-        print(f"[TRIAGE] ERROR: Re-triage failed for patient {patient_id}: {e}")
-        traceback.print_exc()
+        import logging
+        logging.getLogger(__name__).warning(f"Auto re-triage failed for patient {patient_id}: {e}")
 
     # Alert: Vitals recorded and triage updated
     try:
@@ -1698,9 +1693,9 @@ async def shift_patient_triage(
         confidence=shift_data.get("confidence"),
         estimated_wait_time=shift_data.get("estimatedWaitTime"),
         is_applied=True,
-        applied_at=datetime.utcnow().isoformat() + "Z",
+        applied_at=datetime.utcnow(),
         applied_by=current_user.id,
-        created_at=datetime.utcnow().isoformat() + "Z"
+        created_at=datetime.utcnow()
     )
     db.add(triage_record)
 

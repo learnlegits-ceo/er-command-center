@@ -236,7 +236,7 @@ async def create_prescription(
             processing_time_ms=triage_result.get("processing_time_ms"),
             temperature=triage_result.get("temperature"),
             is_applied=True,
-            applied_at=datetime.utcnow().isoformat() + "Z",
+            applied_at=datetime.utcnow(),
             applied_by=current_user.id
         )
         db.add(triage_record)
@@ -265,7 +265,7 @@ async def create_prescription(
             for_roles=["nurse"],
             patient_id=patient_obj_id,
             triggered_by="prescription",
-            metadata={"medication": request.medication_name, "dosage": request.dosage}
+            extra_data={"medication": request.medication_name, "dosage": request.dosage}
         )
         db.add(alert)
         await db.commit()

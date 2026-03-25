@@ -264,10 +264,8 @@ async def record_vitals(
         current_treatments = []
         try:
             current_treatments = await get_active_treatments(db, patient_obj_id)
-        except Exception as tx_err:
-            print(f"[TRIAGE] Warning: Failed to fetch treatments for patient {patient_id}: {tx_err}")
-
-        print(f"[TRIAGE] Running re-triage for patient {patient_id} with vitals: {vitals_dict}, treatments count: {len(current_treatments)}")
+        except Exception:
+            pass  # Treatment fetch failure is non-blocking
 
         triage_service = TriageService()
         triage_result = await triage_service.run_triage(
@@ -279,7 +277,6 @@ async def record_vitals(
             treatments=current_treatments
         )
 
-        print(f"[TRIAGE] Re-triage result for patient {patient_id}: priority={triage_result.get('priority')}, reasoning={triage_result.get('reasoning', '')[:100]}")
 
         # Re-load patient to update priority (it was expired after commit)
         patient_reload = await db.execute(
@@ -334,7 +331,6 @@ async def record_vitals(
     except Exception as e:
         import logging, traceback
         logging.getLogger(__name__).warning(f"Auto re-triage failed for patient {patient_id}: {e}")
-        print(f"[TRIAGE] ERROR: Auto re-triage failed for patient {patient_id}: {e}")
         traceback.print_exc()
 
     return {

@@ -7,6 +7,7 @@ export type UserRole = 'nurse' | 'doctor' | 'admin' | 'platform_admin'
 export interface User {
   id: string
   name: string
+  email?: string
   role: UserRole
   avatar: string
   department?: string
@@ -92,6 +93,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           const restoredUser: User = {
             id: userData.id,
             name: userData.name,
+            email: userData.email,
             role: userData.role as UserRole,
             avatar: userData.avatar || getDefaultAvatar(userData.name, userData.role),
             department: userData.department || 'General'

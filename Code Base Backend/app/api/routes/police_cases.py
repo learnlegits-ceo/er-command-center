@@ -75,7 +75,7 @@ async def create_police_case(
         category="Police Case",
         for_roles=["admin"],
         patient_id=request.patient_id,
-        metadata={
+        extra_data={
             "case_id": str(police_case.id),
             "case_type": request.case_type
         },

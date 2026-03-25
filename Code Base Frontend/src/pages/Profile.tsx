@@ -10,7 +10,7 @@ export default function Profile() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
     name: user?.name || '',
-    email: user?.id ? `${user.name.toLowerCase().replace(/\s+/g, '.')}@hospital.com` : '',
+    email: user?.email || '',
     phone: '+91 98765 43210',
     department: user?.department || '',
   })

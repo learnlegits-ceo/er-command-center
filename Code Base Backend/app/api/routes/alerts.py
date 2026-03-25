@@ -296,7 +296,7 @@ async def mark_alert_read(
 
     old_status = alert.status
     alert.status = "read"
-    alert.read_at = datetime.utcnow().isoformat() + "Z"
+    alert.read_at = datetime.utcnow()
     alert.read_by = current_user.id
 
     # Add history (non-blocking - don't let history failure prevent status update)
@@ -348,7 +348,7 @@ async def acknowledge_alert(
 
     old_status = alert.status
     alert.status = "acknowledged"
-    alert.acknowledged_at = datetime.utcnow().isoformat() + "Z"
+    alert.acknowledged_at = datetime.utcnow()
     alert.acknowledged_by = current_user.id
 
     # Add history (non-blocking - don't let history failure prevent status update)
@@ -401,7 +401,7 @@ async def resolve_alert(
 
     old_status = alert.status
     alert.status = "resolved"
-    alert.resolved_at = datetime.utcnow().isoformat() + "Z"
+    alert.resolved_at = datetime.utcnow()
     alert.resolved_by = current_user.id
     alert.resolution = request.resolution
 
@@ -712,7 +712,7 @@ async def create_alert(
         category=request.category,
         for_roles=request.for_roles,
         patient_id=request.patient_id,
-        metadata=request.metadata,
+        extra_data=request.extra_data,
         triggered_by="manual"
     )
     db.add(alert)
