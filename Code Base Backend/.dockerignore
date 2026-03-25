@@ -56,6 +56,11 @@ uploads/
 # Node modules (if any)
 node_modules/
 
+# Tests (not needed in production)
+tests/
+pytest.ini
+requirements-test.txt
+
 # Lambda specific (not needed for Docker)
 lambda_handler.py
 workers/
