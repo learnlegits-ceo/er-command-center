@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, ForeignKey
+from sqlalchemy import Column, String, Text, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB, INET
 import uuid
 
@@ -20,4 +20,4 @@ class AuditLog(Base):
     ip_address = Column(INET)
     user_agent = Column(Text)
     lambda_request_id = Column(String(100))
-    created_at = Column(String, server_default="now()")
+    created_at = Column(DateTime(timezone=True), server_default="now()")

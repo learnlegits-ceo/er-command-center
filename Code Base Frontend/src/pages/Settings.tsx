@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Bell, Lock, Globe, Moon, Sun, Monitor, Volume2, VolumeX, Eye, EyeOff, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useUser } from '@/contexts/UserContext'
+import { endpoints } from '@/lib/api'
 
 export default function Settings() {
   const { user } = useUser()
@@ -26,6 +27,8 @@ export default function Settings() {
   })
 
   const [showSuccess, setShowSuccess] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordLoading, setPasswordLoading] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -37,17 +40,43 @@ export default function Settings() {
     setTimeout(() => setShowSuccess(false), 3000)
   }
 
-  const handleChangePassword = () => {
-    if (newPassword !== confirmPassword) {
-      alert('Passwords do not match')
+  const handleChangePassword = async () => {
+    setPasswordError('')
+
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters')
       return
     }
-    // In real app, call API to change password
-    setCurrentPassword('')
-    setNewPassword('')
-    setConfirmPassword('')
-    setShowSuccess(true)
-    setTimeout(() => setShowSuccess(false), 3000)
+    if (!/[A-Z]/.test(newPassword)) {
+      setPasswordError('Password must contain at least one uppercase letter')
+      return
+    }
+    if (!/[0-9]/.test(newPassword)) {
+      setPasswordError('Password must contain at least one number')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match')
+      return
+    }
+
+    setPasswordLoading(true)
+    try {
+      await endpoints.auth.changePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      })
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setShowSuccess(true)
+      setTimeout(() => setShowSuccess(false), 3000)
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || 'Failed to change password'
+      setPasswordError(msg)
+    } finally {
+      setPasswordLoading(false)
+    }
   }
 
   if (!user) {
@@ -219,19 +248,13 @@ export default function Settings() {
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium text-foreground">Two-Factor Authentication</p>
-              <p className="text-sm text-muted-foreground">Add an extra layer of security</p>
+              <p className="text-sm text-muted-foreground">Coming soon</p>
             </div>
             <button
-              onClick={() => setSettings({ ...settings, twoFactorAuth: !settings.twoFactorAuth })}
-              className={`relative w-12 h-6 rounded-full transition-colors ${
-                settings.twoFactorAuth ? 'bg-primary' : 'bg-muted'
-              }`}
+              disabled
+              className="relative w-12 h-6 rounded-full bg-muted opacity-50 cursor-not-allowed"
             >
-              <span
-                className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                  settings.twoFactorAuth ? 'left-7' : 'left-1'
-                }`}
-              />
+              <span className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full" />
             </button>
           </div>
 
@@ -294,13 +317,16 @@ export default function Settings() {
                 placeholder="Confirm new password"
                 className="w-full px-3 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
               />
+              {passwordError && (
+                <p className="text-sm text-red-500">{passwordError}</p>
+              )}
               <Button
                 onClick={handleChangePassword}
-                disabled={!currentPassword || !newPassword || !confirmPassword}
+                disabled={!currentPassword || !newPassword || !confirmPassword || passwordLoading}
                 variant="outline"
                 className="w-full"
               >
-                Update Password
+                {passwordLoading ? 'Updating...' : 'Update Password'}
               </Button>
             </div>
           </div>

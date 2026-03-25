@@ -13,7 +13,7 @@ from app.models.alert import Alert
 from app.models.triage import AITriageResult
 from app.models.prescription import Prescription
 from app.schemas.vitals import VitalsCreate, VitalsResponse
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_nurse_or_doctor
 from app.services.triage import TriageService
 
 router = APIRouter()
@@ -121,62 +121,21 @@ async def get_patient_vitals(
             detail="Patient not found"
         )
 
-    # Fetch all vitals and sort in Python to avoid text-column ordering bugs
+    # Fetch all vitals sorted by recorded_at (now a proper DateTime column)
     result = await db.execute(
-        select(PatientVitals).where(PatientVitals.patient_id == patient_id)
+        select(PatientVitals)
+        .where(PatientVitals.patient_id == patient_id)
+        .order_by(PatientVitals.recorded_at.desc())
+        .limit(limit)
     )
-    all_vitals = result.scalars().all()
-
-    def _parse_ts_local(val):
-        """Parse timestamp string into naive-UTC datetime for sorting."""
-        if not val:
-            return datetime.min
-        s = str(val).strip()
-        if ' ' in s and 'T' not in s:
-            s = s.replace(' ', 'T', 1)
-        tz_offset_hours = 0
-        tz_offset_minutes = 0
-        if s.endswith('Z'):
-            s = s[:-1]
-        elif '+' in s[10:]:
-            plus_pos = s.rfind('+')
-            tz_part = s[plus_pos + 1:]
-            s = s[:plus_pos]
-            parts = tz_part.split(':')
-            tz_offset_hours = int(parts[0]) if parts[0] else 0
-            tz_offset_minutes = int(parts[1]) if len(parts) > 1 else 0
-        elif s.count('-') == 3:
-            minus_pos = s.rfind('-')
-            tz_part = s[minus_pos + 1:]
-            s = s[:minus_pos]
-            parts = tz_part.split(':')
-            tz_offset_hours = -(int(parts[0]) if parts[0] else 0)
-            tz_offset_minutes = -(int(parts[1]) if len(parts) > 1 else 0)
-        try:
-            from datetime import timedelta
-            dt = datetime.fromisoformat(s)
-            dt = dt - timedelta(hours=tz_offset_hours, minutes=tz_offset_minutes)
-            return dt
-        except (ValueError, TypeError):
-            return datetime.min
-
-    vitals_list = sorted(all_vitals, key=lambda v: _parse_ts_local(v.recorded_at), reverse=True)[:limit]
+    vitals_list = result.scalars().all()
 
     # Get current (latest) vitals
     current = None
     history = []
 
     for v in vitals_list:
-        # Ensure recordedAt is in ISO format with UTC timezone for frontend parsing
-        recorded_at_iso = None
-        if v.recorded_at:
-            s = str(v.recorded_at).strip()
-            if s and ' ' in s and 'T' not in s:
-                s = s.replace(' ', 'T', 1)
-            # If no timezone indicator, assume UTC
-            if s and '+' not in s and 'Z' not in s and s[-1].isdigit():
-                s = s + "Z"
-            recorded_at_iso = s if s else None
+        recorded_at_iso = v.recorded_at.isoformat() if v.recorded_at else None
 
         vitals_data = {
             "hr": v.heart_rate,
@@ -209,10 +168,10 @@ async def get_patient_vitals(
 async def record_vitals(
     patient_id: UUID,
     request: VitalsCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_nurse_or_doctor),
     db: AsyncSession = Depends(get_db)
 ):
-    """Record new vitals."""
+    """Record new vitals. Restricted to nurses and doctors."""
     # Verify patient exists
     patient_result = await db.execute(
         select(Patient).where(
@@ -239,7 +198,7 @@ async def record_vitals(
         bp_dia = int(parts[1])
 
     # Create vitals record
-    now_iso = datetime.utcnow().isoformat() + "Z"
+    now = datetime.utcnow()
     vitals = PatientVitals(
         patient_id=patient_id,
         heart_rate=request.hr,
@@ -254,8 +213,8 @@ async def record_vitals(
         notes=request.notes,
         source="manual",
         recorded_by=current_user.id,
-        recorded_at=now_iso,
-        created_at=now_iso
+        recorded_at=now,
+        created_at=now
     )
 
     # Check for critical values
@@ -357,9 +316,9 @@ async def record_vitals(
             processing_time_ms=triage_result.get("processing_time_ms"),
             temperature=triage_result.get("temperature"),
             is_applied=True,
-            applied_at=datetime.utcnow().isoformat() + "Z",
+            applied_at=datetime.utcnow(),
             applied_by=current_user.id,
-            created_at=datetime.utcnow().isoformat() + "Z"
+            created_at=datetime.utcnow()
         )
         db.add(triage_record)
         await db.commit()

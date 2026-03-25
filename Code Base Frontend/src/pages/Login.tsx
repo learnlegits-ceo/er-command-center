@@ -120,6 +120,7 @@ export default function Login() {
                   className="w-full pl-10 pr-12 py-3 border border-input rounded-lg bg-background text-foreground focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
                   autoComplete="new-password"
                   required
+                  minLength={6}
                 />
                 <button
                   type="button"
@@ -152,36 +153,38 @@ export default function Login() {
           </form>
         </div>
 
-        {/* Demo Credentials */}
-        <div className="mt-6 bg-card rounded-lg border border-border p-4">
-          <p className="text-sm font-medium text-foreground mb-3">Demo Credentials:</p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left py-2 text-muted-foreground font-medium">Role</th>
-                <th className="text-left py-2 text-muted-foreground font-medium">Email</th>
-                <th className="text-left py-2 text-muted-foreground font-medium">Password</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-border">
-                <td className="py-2 text-foreground">Nurse</td>
-                <td className="py-2 text-foreground font-mono text-xs">priya@hospital.com</td>
-                <td className="py-2 text-foreground font-mono text-xs">nurse123</td>
-              </tr>
-              <tr className="border-b border-border">
-                <td className="py-2 text-foreground">Doctor</td>
-                <td className="py-2 text-foreground font-mono text-xs">ananya@hospital.com</td>
-                <td className="py-2 text-foreground font-mono text-xs">doctor123</td>
-              </tr>
-              <tr>
-                <td className="py-2 text-foreground">Admin</td>
-                <td className="py-2 text-foreground font-mono text-xs">rajesh@hospital.com</td>
-                <td className="py-2 text-foreground font-mono text-xs">admin123</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        {/* Demo Credentials — only shown when VITE_SHOW_DEMO_CREDS is set */}
+        {import.meta.env.VITE_SHOW_DEMO_CREDS === 'true' && (
+          <div className="mt-6 bg-card rounded-lg border border-border p-4">
+            <p className="text-sm font-medium text-foreground mb-3">Demo Credentials:</p>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 text-muted-foreground font-medium">Role</th>
+                  <th className="text-left py-2 text-muted-foreground font-medium">Email</th>
+                  <th className="text-left py-2 text-muted-foreground font-medium">Password</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-border">
+                  <td className="py-2 text-foreground">Nurse</td>
+                  <td className="py-2 text-foreground font-mono text-xs">priya@hospital.com</td>
+                  <td className="py-2 text-foreground font-mono text-xs">nurse123</td>
+                </tr>
+                <tr className="border-b border-border">
+                  <td className="py-2 text-foreground">Doctor</td>
+                  <td className="py-2 text-foreground font-mono text-xs">ananya@hospital.com</td>
+                  <td className="py-2 text-foreground font-mono text-xs">doctor123</td>
+                </tr>
+                <tr>
+                  <td className="py-2 text-foreground">Admin</td>
+                  <td className="py-2 text-foreground font-mono text-xs">rajesh@hospital.com</td>
+                  <td className="py-2 text-foreground font-mono text-xs">admin123</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Footer */}
         <p className="text-center text-sm text-muted-foreground mt-6">

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Text, ForeignKey
+from sqlalchemy import Column, String, Integer, Text, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
 
@@ -32,18 +32,18 @@ class Notification(Base):
     status = Column(String(20), default="pending")  # pending, queued, sent, delivered, read, failed
 
     # Timestamps
-    queued_at = Column(String)
-    sent_at = Column(String)
-    delivered_at = Column(String)
-    read_at = Column(String)
-    failed_at = Column(String)
+    queued_at = Column(DateTime(timezone=True))
+    sent_at = Column(DateTime(timezone=True))
+    delivered_at = Column(DateTime(timezone=True))
+    read_at = Column(DateTime(timezone=True))
+    failed_at = Column(DateTime(timezone=True))
     failure_reason = Column(Text)
 
     retry_count = Column(Integer, default=0)
     max_retries = Column(Integer, default=3)
-    scheduled_for = Column(String)
+    scheduled_for = Column(DateTime(timezone=True))
 
-    created_at = Column(String, server_default="now()")
+    created_at = Column(DateTime(timezone=True), server_default="now()")
 
 
 class SQSMessage(Base):
@@ -57,8 +57,8 @@ class SQSMessage(Base):
     message_type = Column(String(50), nullable=False)
     payload = Column(JSONB, nullable=False)
     status = Column(String(20), default="pending")  # pending, sent, processing, completed, failed, dead_letter
-    sent_at = Column(String)
-    processed_at = Column(String)
+    sent_at = Column(DateTime(timezone=True))
+    processed_at = Column(DateTime(timezone=True))
     retry_count = Column(Integer, default=0)
     error_message = Column(Text)
-    created_at = Column(String, server_default="now()")
+    created_at = Column(DateTime(timezone=True), server_default="now()")

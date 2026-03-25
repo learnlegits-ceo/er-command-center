@@ -37,8 +37,6 @@ async def login(
     """Authenticate user and return JWT token."""
     rate_limit_login(http_request)
     try:
-        print(f"[LOGIN] Attempting login for: {request.email}")
-
         # Find user by email with department eagerly loaded
         result = await db.execute(
             select(User)
@@ -51,25 +49,18 @@ async def login(
         user = result.scalar_one_or_none()
 
         if not user:
-            print(f"[LOGIN] User not found: {request.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password"
             )
-
-        print(f"[LOGIN] User found: {user.name}, verifying password...")
 
         if not verify_password(request.password, user.password_hash):
-            print(f"[LOGIN] Password verification failed for: {request.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password"
             )
 
-        print(f"[LOGIN] Password verified for: {user.name}")
-
         if user.status != "active":
-            print(f"[LOGIN] User not active: {user.name}, status: {user.status}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Account is not active"
@@ -82,7 +73,6 @@ async def login(
             "role": user.role
         }
 
-        print(f"[LOGIN] Creating tokens for: {user.name}")
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
 
@@ -99,16 +89,13 @@ async def login(
             db.add(session)
             user.last_active_at = datetime.utcnow()
             await db.commit()
-            print(f"[LOGIN] Session stored for: {user.name}")
-        except Exception as session_error:
-            print(f"[LOGIN] Session storage error (continuing anyway): {session_error}")
+        except Exception:
+            pass  # Session storage is non-blocking
 
         # Get department name
         department_name = None
         if user.department:
             department_name = user.department.name
-
-        print(f"[LOGIN] SUCCESS for: {user.name}")
 
         return {
             "success": True,
@@ -130,8 +117,6 @@ async def login(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[LOGIN] UNEXPECTED ERROR: {type(e).__name__}: {str(e)}")
-        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred. Please try again."
@@ -158,8 +143,7 @@ async def logout(
 
         await db.commit()
         return {"success": True, "message": "Logged out successfully"}
-    except Exception as e:
-        print(f"[LOGOUT] Error: {type(e).__name__}: {str(e)}")
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred. Please try again."
@@ -208,17 +192,15 @@ async def forgot_password(
                 otp=otp,
                 user_name=user.name
             )
-        except Exception as e:
-            # Log error type only — never log the OTP value
-            print(f"[FORGOT-PASSWORD] Email delivery failed for {user.email}: {type(e).__name__}")
+        except Exception:
+            pass  # Email delivery failure is non-blocking
 
         return {
             "success": True,
             "message": "OTP sent to email",
             "otpExpiry": otp_expiry.isoformat()
         }
-    except Exception as e:
-        print(f"[FORGOT-PASSWORD] Error: {type(e).__name__}: {str(e)}")
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred. Please try again."
@@ -274,8 +256,7 @@ async def verify_otp(
         }
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[VERIFY-OTP] Error: {type(e).__name__}: {str(e)}")
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred. Please try again."
@@ -318,14 +299,14 @@ async def reset_password(
 
         if user:
             user.password_hash = get_password_hash(request.new_password)
-            reset_token.is_used = True
+            # Delete the used token instead of just marking it
+            await db.delete(reset_token)
             await db.commit()
 
         return {"success": True, "message": "Password reset successfully"}
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[RESET-PASSWORD] Error: {type(e).__name__}: {str(e)}")
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred. Please try again."
@@ -352,8 +333,7 @@ async def change_password(
         return {"success": True, "message": "Password changed successfully"}
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[CHANGE-PASSWORD] Error: {type(e).__name__}: {str(e)}")
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred. Please try again."
@@ -413,8 +393,7 @@ async def refresh_token(
         }
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[REFRESH-TOKEN] Error: {type(e).__name__}: {str(e)}")
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred. Please try again."
@@ -451,8 +430,7 @@ async def get_current_user_info(
                 "phone": current_user.phone
             }
         }
-    except Exception as e:
-        print(f"[ME] Error: {type(e).__name__}: {str(e)}")
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred. Please try again."
@@ -532,7 +510,6 @@ async def seed_database(db: AsyncSession = Depends(get_db)):
             db.add(user)
 
         await db.commit()
-        print("[SEED] Database seeded successfully!")
 
         return {
             "success": True,
@@ -541,9 +518,7 @@ async def seed_database(db: AsyncSession = Depends(get_db)):
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[SEED] Error: {type(e).__name__}: {str(e)}")
-        traceback.print_exc()
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred. Please try again."

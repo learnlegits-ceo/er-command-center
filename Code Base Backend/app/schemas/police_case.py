@@ -1,16 +1,28 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
+
+VALID_CASE_TYPES = (
+    "road_accident", "assault", "domestic_violence", "burn",
+    "poisoning", "suicide_attempt", "unknown_identity", "other"
+)
 
 
 class PoliceCaseCreate(BaseModel):
     """Create police case request."""
     patient_id: UUID
     patient_name: str
-    case_type: str  # road_accident, assault, domestic_violence, burn, poisoning, suicide_attempt, unknown_identity, other
+    case_type: str
     description: Optional[str] = None
     complaint: Optional[str] = None
+
+    @field_validator("case_type")
+    @classmethod
+    def validate_case_type(cls, v: str) -> str:
+        if v not in VALID_CASE_TYPES:
+            raise ValueError(f"Invalid case type. Must be one of: {', '.join(VALID_CASE_TYPES)}")
+        return v
 
 
 class PoliceCaseResponse(BaseModel):

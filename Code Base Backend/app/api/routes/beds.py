@@ -162,12 +162,12 @@ async def assign_bed(
     db: AsyncSession = Depends(get_db)
 ):
     """Assign bed to a patient."""
-    # Get bed
+    # Get bed with row-level lock to prevent concurrent assignment
     bed_result = await db.execute(
         select(Bed).where(
             Bed.id == bed_id,
             Bed.tenant_id == current_user.tenant_id
-        )
+        ).with_for_update()
     )
     bed = bed_result.scalar_one_or_none()
 

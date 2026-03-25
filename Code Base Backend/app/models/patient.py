@@ -94,7 +94,7 @@ class PatientAllergy(Base):
     reaction = Column(Text)
     notes = Column(Text)
     reported_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    created_at = Column(String, server_default="now()")
+    created_at = Column(DateTime(timezone=True), server_default="now()")
 
     # Relationships
     patient = relationship("Patient", back_populates="allergies")
@@ -129,8 +129,8 @@ class PatientVitals(Base):
     raw_ocr_text = Column(Text)
 
     recorded_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    recorded_at = Column(String, server_default="now()")
-    created_at = Column(String, server_default="now()")
+    recorded_at = Column(DateTime(timezone=True), server_default="now()")
+    created_at = Column(DateTime(timezone=True), server_default="now()")
 
     # Relationships
     patient = relationship("Patient", back_populates="vitals")

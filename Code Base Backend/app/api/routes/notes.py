@@ -9,7 +9,7 @@ from app.models.user import User
 from app.models.patient import Patient, PatientNote
 from app.models.alert import Alert
 from app.schemas.note import NoteCreate, NoteResponse
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_nurse_or_doctor
 
 router = APIRouter()
 
@@ -18,10 +18,10 @@ router = APIRouter()
 async def get_patient_notes(
     patient_id: UUID,
     type: Optional[str] = Query("all", description="Note type filter"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_nurse_or_doctor),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get patient notes."""
+    """Get patient notes. Restricted to doctors and nurses."""
     # Verify patient exists
     patient_result = await db.execute(
         select(Patient).where(
@@ -42,6 +42,16 @@ async def get_patient_notes(
         PatientNote.patient_id == patient_id,
         PatientNote.deleted_at.is_(None)
     )
+
+    # Filter confidential notes — only visible to the note creator or doctors
+    if current_user.role != "doctor":
+        from sqlalchemy import or_
+        query = query.where(
+            or_(
+                PatientNote.is_confidential == False,
+                PatientNote.created_by == current_user.id
+            )
+        )
 
     if type and type != "all":
         query = query.where(PatientNote.note_type == type)
@@ -85,10 +95,10 @@ async def get_patient_notes(
 async def create_patient_note(
     patient_id: UUID,
     request: NoteCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_nurse_or_doctor),
     db: AsyncSession = Depends(get_db)
 ):
-    """Add note to patient."""
+    """Add note to patient. Restricted to doctors and nurses."""
     # Verify patient exists
     patient_result = await db.execute(
         select(Patient).where(

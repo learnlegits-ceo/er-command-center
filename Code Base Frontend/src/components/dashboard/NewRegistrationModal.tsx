@@ -34,7 +34,7 @@ export function NewRegistrationModal({ open, onOpenChange, defaultDepartmentName
   const [formData, setFormData] = useState({
     name: '',
     age: '',
-    gender: 'male',
+    gender: 'M',
     bloodGroup: '',
     phone: '+91 ',
     purpose: '',
@@ -97,9 +97,15 @@ export function NewRegistrationModal({ open, onOpenChange, defaultDepartmentName
   const handleSubmit = async () => {
     try {
       // Prepare patient data for API (backend expects string values for vitals)
+      const trimmedName = formData.name.trim();
+      const parsedAge = parseInt(formData.age);
+      if (parsedAge < 0 || parsedAge > 150 || isNaN(parsedAge)) {
+        alert('Age must be a whole number between 0 and 150');
+        return;
+      }
       const patientData: any = {
-        name: formData.name,
-        age: parseInt(formData.age) || 0,
+        name: trimmedName,
+        age: parsedAge,
         gender: formData.gender,
         phone: formData.phone,
         blood_group: formData.bloodGroup || undefined,
@@ -157,7 +163,7 @@ export function NewRegistrationModal({ open, onOpenChange, defaultDepartmentName
     setFormData({
       name: '',
       age: '',
-      gender: 'male',
+      gender: 'M',
       bloodGroup: '',
       phone: '',
       purpose: '',
@@ -431,11 +437,14 @@ export function NewRegistrationModal({ open, onOpenChange, defaultDepartmentName
                   Age <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="text"
+                  type="number"
+                  min="0"
+                  max="150"
+                  step="1"
                   value={formData.age}
                   onChange={(e) => setFormData({ ...formData, age: e.target.value })}
                   className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="e.g., 45M or 32F"
+                  placeholder="e.g., 45"
                 />
               </div>
 
@@ -448,9 +457,9 @@ export function NewRegistrationModal({ open, onOpenChange, defaultDepartmentName
                   onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
                   className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
+                  <option value="M">Male</option>
+                  <option value="F">Female</option>
+                  <option value="O">Other</option>
                 </select>
               </div>
 
@@ -556,7 +565,10 @@ export function NewRegistrationModal({ open, onOpenChange, defaultDepartmentName
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">Heart Rate</label>
                   <input
-                    type="text"
+                    type="number"
+                    min="20"
+                    max="300"
+                    step="1"
                     value={formData.vitals.hr}
                     onChange={(e) => setFormData({
                       ...formData,
@@ -571,10 +583,13 @@ export function NewRegistrationModal({ open, onOpenChange, defaultDepartmentName
                   <input
                     type="text"
                     value={formData.vitals.bp}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      vitals: { ...formData.vitals, bp: e.target.value }
-                    })}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9/]/g, '');
+                      setFormData({
+                        ...formData,
+                        vitals: { ...formData.vitals, bp: val }
+                      });
+                    }}
                     className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                     placeholder="120/80"
                   />
@@ -582,7 +597,10 @@ export function NewRegistrationModal({ open, onOpenChange, defaultDepartmentName
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">SpO₂</label>
                   <input
-                    type="text"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
                     value={formData.vitals.spo2}
                     onChange={(e) => setFormData({
                       ...formData,
@@ -595,7 +613,10 @@ export function NewRegistrationModal({ open, onOpenChange, defaultDepartmentName
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">Temperature</label>
                   <input
-                    type="text"
+                    type="number"
+                    min="30"
+                    max="45"
+                    step="0.1"
                     value={formData.vitals.temp}
                     onChange={(e) => setFormData({
                       ...formData,
@@ -608,7 +629,10 @@ export function NewRegistrationModal({ open, onOpenChange, defaultDepartmentName
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">Resp. Rate</label>
                   <input
-                    type="text"
+                    type="number"
+                    min="4"
+                    max="80"
+                    step="1"
                     value={formData.vitals.rr}
                     onChange={(e) => setFormData({
                       ...formData,

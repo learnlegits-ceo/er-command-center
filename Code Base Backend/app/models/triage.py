@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Integer, Text, ForeignKey, Numeric
+from sqlalchemy import Column, String, Boolean, Integer, Text, ForeignKey, Numeric, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
 import uuid
 
@@ -41,12 +41,12 @@ class AITriageResult(Base):
 
     # Status
     is_applied = Column(Boolean, default=False)
-    applied_at = Column(String)
+    applied_at = Column(DateTime(timezone=True))
     applied_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     override_priority = Column(Integer)
     override_reason = Column(Text)
 
-    created_at = Column(String, server_default="now()")
+    created_at = Column(DateTime(timezone=True), server_default="now()")
 
     # Relationships
     from sqlalchemy.orm import relationship

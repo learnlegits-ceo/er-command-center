@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Integer, Text, ForeignKey, Date
+from sqlalchemy import Column, String, Boolean, Integer, Text, ForeignKey, Date, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
 from sqlalchemy.orm import relationship
 import uuid
@@ -46,11 +46,11 @@ class Prescription(Base, TimestampMixin):
 
     # Prescriber info
     prescribed_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    prescribed_at = Column(String, server_default="now()")
+    prescribed_at = Column(DateTime(timezone=True), server_default="now()")
 
     # Discontinuation
     discontinued_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    discontinued_at = Column(String)
+    discontinued_at = Column(DateTime(timezone=True))
     discontinue_reason = Column(Text)
 
     # Relationships

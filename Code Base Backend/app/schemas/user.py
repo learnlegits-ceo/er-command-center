@@ -4,6 +4,9 @@ from datetime import datetime, date
 from uuid import UUID
 
 
+VALID_ROLES = ("platform_admin", "admin", "doctor", "nurse", "technician", "receptionist")
+
+
 class UserBase(BaseModel):
     """Base user schema."""
     name: str
@@ -12,6 +15,13 @@ class UserBase(BaseModel):
     department_id: Optional[UUID] = None
     phone: Optional[str] = None
     specialization: Optional[str] = None
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        if v not in VALID_ROLES:
+            raise ValueError(f"Invalid role. Must be one of: {', '.join(VALID_ROLES)}")
+        return v
 
 
 class UserCreate(UserBase):

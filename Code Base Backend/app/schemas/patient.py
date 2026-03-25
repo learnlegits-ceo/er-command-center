@@ -1,7 +1,11 @@
-from pydantic import BaseModel
-from typing import Optional, List, Any
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List, Any, Literal
 from datetime import datetime, date
 from uuid import UUID
+
+
+VALID_BLOOD_GROUPS = ("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
+VALID_GENDERS = ("M", "F", "O", "male", "female", "other")
 
 
 class VitalsInput(BaseModel):
@@ -15,12 +19,12 @@ class VitalsInput(BaseModel):
 
 class PatientCreate(BaseModel):
     """Create patient request."""
-    name: str
-    age: Optional[int] = None
+    name: str = Field(..., min_length=1, max_length=200)
+    age: Optional[int] = Field(None, ge=0, le=150, description="Patient age in years")
     gender: Optional[str] = None
-    phone: Optional[str] = None
-    emergency_contact: Optional[str] = None
-    complaint: str
+    phone: Optional[str] = Field(None, max_length=20)
+    emergency_contact: Optional[str] = Field(None, max_length=20)
+    complaint: str = Field(..., min_length=1)
     vitals: Optional[VitalsInput] = None
     is_police_case: bool = False
     police_case_type: Optional[str] = None
@@ -32,12 +36,33 @@ class PatientCreate(BaseModel):
     bed_id: Optional[UUID] = None
     auto_assign_bed: bool = True
 
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Name cannot be blank")
+        return v.strip()
+
+    @field_validator("blood_group")
+    @classmethod
+    def validate_blood_group(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in VALID_BLOOD_GROUPS:
+            raise ValueError(f"Invalid blood group. Must be one of: {', '.join(VALID_BLOOD_GROUPS)}")
+        return v
+
+    @field_validator("gender")
+    @classmethod
+    def validate_gender(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v.lower() not in ("m", "f", "o", "male", "female", "other"):
+            raise ValueError("Gender must be one of: M, F, O, male, female, other")
+        return v
+
 
 class PatientUpdate(BaseModel):
     """Update patient request."""
     name: Optional[str] = None
     complaint: Optional[str] = None
-    phone: Optional[str] = None
+    phone: Optional[str] = Field(None, max_length=20)
     blood_group: Optional[str] = None
     status: Optional[str] = None
     bed_id: Optional[UUID] = None
@@ -45,6 +70,20 @@ class PatientUpdate(BaseModel):
     assigned_doctor_id: Optional[UUID] = None
     assigned_nurse_id: Optional[UUID] = None
     history: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not v.strip():
+            raise ValueError("Name cannot be blank")
+        return v.strip() if v else v
+
+    @field_validator("blood_group")
+    @classmethod
+    def validate_blood_group(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in VALID_BLOOD_GROUPS:
+            raise ValueError(f"Invalid blood group. Must be one of: {', '.join(VALID_BLOOD_GROUPS)}")
+        return v
 
 
 class AssignedStaffResponse(BaseModel):

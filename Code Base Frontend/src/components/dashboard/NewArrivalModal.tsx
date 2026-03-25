@@ -139,9 +139,15 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
   const handleSubmit = async () => {
     try {
       // Prepare patient data for API (backend expects string values for vitals)
+      const trimmedName = formData.name.trim();
+      const parsedAge = parseInt(formData.age);
+      if (parsedAge < 0 || parsedAge > 150 || isNaN(parsedAge)) {
+        alert('Age must be a whole number between 0 and 150');
+        return;
+      }
       const patientData: any = {
-        name: formData.name,
-        age: parseInt(formData.age) || 0,
+        name: trimmedName,
+        age: parsedAge,
         gender: formData.gender,
         blood_group: formData.bloodGroup || undefined,
         phone: formData.phone || undefined,
@@ -351,11 +357,14 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                   Age <span className="text-red-500">*</span>
                 </label>
                 <input
-                  type="text"
+                  type="number"
+                  min="0"
+                  max="150"
+                  step="1"
                   value={formData.age}
                   onChange={(e) => setFormData({ ...formData, age: e.target.value })}
                   className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="e.g., 45M or 32F"
+                  placeholder="e.g., 45"
                 />
               </div>
 
@@ -628,7 +637,10 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">HR (bpm)</label>
                   <input
-                    type="text"
+                    type="number"
+                    min="20"
+                    max="300"
+                    step="1"
                     value={formData.vitals.hr}
                     onChange={(e) => setFormData({
                       ...formData,
@@ -643,10 +655,13 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                   <input
                     type="text"
                     value={formData.vitals.bp}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      vitals: { ...formData.vitals, bp: e.target.value }
-                    })}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9/]/g, '');
+                      setFormData({
+                        ...formData,
+                        vitals: { ...formData.vitals, bp: val }
+                      });
+                    }}
                     className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                     placeholder="120/80"
                   />
@@ -654,7 +669,10 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">SpO₂ (%)</label>
                   <input
-                    type="text"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
                     value={formData.vitals.spo2}
                     onChange={(e) => setFormData({
                       ...formData,
@@ -667,7 +685,10 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">Temp (°C)</label>
                   <input
-                    type="text"
+                    type="number"
+                    min="30"
+                    max="45"
+                    step="0.1"
                     value={formData.vitals.temp}
                     onChange={(e) => setFormData({
                       ...formData,
@@ -680,7 +701,10 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">RR (/min)</label>
                   <input
-                    type="text"
+                    type="number"
+                    min="4"
+                    max="80"
+                    step="1"
                     value={formData.vitals.rr}
                     onChange={(e) => setFormData({
                       ...formData,

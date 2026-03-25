@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime, date
 from uuid import UUID
@@ -6,16 +6,16 @@ from uuid import UUID
 
 class PrescriptionCreate(BaseModel):
     """Create prescription request."""
-    medication_name: str
+    medication_name: str = Field(..., min_length=1, max_length=200)
     medication_code: Optional[str] = None
     medication_form: Optional[str] = None
     generic_name: Optional[str] = None
-    dosage: str
+    dosage: str = Field(..., min_length=1, max_length=100)
     dosage_unit: Optional[str] = None
-    frequency: str
+    frequency: str = Field(..., min_length=1, max_length=100)
     route: Optional[str] = None
     duration: Optional[str] = None
-    quantity: Optional[int] = None
+    quantity: Optional[int] = Field(None, gt=0, description="Must be positive")
     instructions: Optional[str] = None
     special_instructions: Optional[str] = None
     start_date: Optional[date] = None
@@ -39,7 +39,7 @@ class PrescriptionResponse(BaseModel):
     route: Optional[str] = None
     duration: Optional[str] = None
     quantity: Optional[int] = None
-    refills: int = 0
+    refills: int = Field(0, ge=0, description="Must be non-negative")
     instructions: Optional[str] = None
     special_instructions: Optional[str] = None
     status: str = "active"

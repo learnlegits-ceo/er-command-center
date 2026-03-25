@@ -842,10 +842,10 @@ async def upload_patient_photo(
 async def discharge_patient(
     patient_id: UUID,
     request: PatientDischargeRequest,
-    current_user: User = Depends(require_any_staff),
+    current_user: User = Depends(require_doctor_or_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """Discharge patient."""
+    """Discharge patient. Restricted to doctors and admins."""
     result = await db.execute(
         select(Patient).where(
             Patient.id == patient_id,

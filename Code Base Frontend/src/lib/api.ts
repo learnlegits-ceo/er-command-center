@@ -23,16 +23,72 @@ api.interceptors.request.use(
   }
 )
 
-// Response interceptor for handling errors
+// Response interceptor — auto-refresh token on 401
+let isRefreshing = false
+let failedQueue: Array<{ resolve: (token: string) => void; reject: (error: any) => void }> = []
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (token) {
+      prom.resolve(token)
+    } else {
+      prom.reject(error)
+    }
+  })
+  failedQueue = []
+}
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    // Don't redirect on 401 for auth-related requests or if already on login page
-    const isAuthRequest = error.config?.url?.includes('/auth/')
+  async (error) => {
+    const originalRequest = error.config
+    const isAuthRequest = originalRequest?.url?.includes('/auth/')
     const isOnLoginPage = window.location.pathname === '/login'
 
-    if (error.response?.status === 401 && !isAuthRequest && !isOnLoginPage) {
-      // Handle unauthorized access - clear tokens and redirect to login
+    // Attempt token refresh on 401 (not for auth routes, not already retried)
+    if (error.response?.status === 401 && !isAuthRequest && !isOnLoginPage && !originalRequest._retry) {
+      const refreshToken = localStorage.getItem('refreshToken')
+
+      if (refreshToken) {
+        if (isRefreshing) {
+          // Queue this request while refresh is in progress
+          return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject })
+          }).then((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`
+            return api(originalRequest)
+          })
+        }
+
+        originalRequest._retry = true
+        isRefreshing = true
+
+        try {
+          const response = await api.post('/auth/refresh-token', { refresh_token: refreshToken })
+          const newToken = response.data.token
+          const newRefreshToken = response.data.refresh_token
+
+          localStorage.setItem('authToken', newToken)
+          if (newRefreshToken) {
+            localStorage.setItem('refreshToken', newRefreshToken)
+          }
+
+          processQueue(null, newToken)
+          originalRequest.headers.Authorization = `Bearer ${newToken}`
+          return api(originalRequest)
+        } catch (refreshError) {
+          processQueue(refreshError, null)
+          localStorage.removeItem('authToken')
+          localStorage.removeItem('refreshToken')
+          localStorage.removeItem('currentUser')
+          window.location.href = '/login'
+          return Promise.reject(refreshError)
+        } finally {
+          isRefreshing = false
+        }
+      }
+
+      // No refresh token — redirect to login
       localStorage.removeItem('authToken')
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('currentUser')
@@ -145,6 +201,8 @@ export const endpoints = {
     forgotPassword: (data: { email: string }) => api.post('/auth/forgot-password', data),
     verifyOTP: (data: { email: string; otp: string }) => api.post('/auth/verify-otp', data),
     resetPassword: (data: { reset_token: string; new_password: string }) => api.post('/auth/reset-password', data),
+    changePassword: (data: { current_password: string; new_password: string }) => api.post('/auth/change-password', data),
+    refreshToken: (refreshToken: string) => api.post('/auth/refresh-token', { refresh_token: refreshToken }),
   },
 
   // Admin endpoints

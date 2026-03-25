@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Text, ForeignKey
+from sqlalchemy import Column, String, Boolean, Text, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -29,11 +29,11 @@ class PoliceCase(Base, TimestampMixin):
 
     # Reporting
     reported_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    reported_at = Column(String, server_default="now()")
+    reported_at = Column(DateTime(timezone=True), server_default="now()")
 
     # Police Contact
     police_contacted = Column(Boolean, default=False)
-    police_contacted_at = Column(String)
+    police_contacted_at = Column(DateTime(timezone=True))
     police_contacted_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     police_station = Column(String(255))
     officer_name = Column(String(255))
@@ -41,7 +41,7 @@ class PoliceCase(Base, TimestampMixin):
     fir_number = Column(String(100))
 
     # Resolution
-    resolved_at = Column(String)
+    resolved_at = Column(DateTime(timezone=True))
     resolved_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     resolution = Column(Text)
 

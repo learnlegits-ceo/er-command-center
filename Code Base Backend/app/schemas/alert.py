@@ -1,7 +1,9 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
+
+VALID_ALERT_PRIORITIES = ("critical", "high", "medium", "low", "info")
 
 
 class PatientBrief(BaseModel):
@@ -18,11 +20,18 @@ class AlertCreate(BaseModel):
     """Create alert request."""
     title: str
     message: str
-    priority: str  # critical, high, medium, low, info
+    priority: str
     category: str
     for_roles: Optional[List[str]] = None
     patient_id: Optional[UUID] = None
-    metadata: Optional[Dict[str, Any]] = None
+    extra_data: Optional[Dict[str, Any]] = None
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, v: str) -> str:
+        if v not in VALID_ALERT_PRIORITIES:
+            raise ValueError(f"Invalid priority. Must be one of: {', '.join(VALID_ALERT_PRIORITIES)}")
+        return v
 
 
 class AlertResponse(BaseModel):
@@ -35,7 +44,7 @@ class AlertResponse(BaseModel):
     category: str
     for_roles: Optional[List[str]] = None
     patient: Optional[PatientBrief] = None
-    metadata: Optional[Dict[str, Any]] = None
+    extra_data: Optional[Dict[str, Any]] = None
     triggered_by: Optional[str] = None
     created_at: Optional[datetime] = None
     read_at: Optional[datetime] = None

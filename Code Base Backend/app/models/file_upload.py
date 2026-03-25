@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Text, ForeignKey
+from sqlalchemy import Column, String, Integer, Text, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
@@ -22,4 +22,4 @@ class FileUpload(Base, SoftDeleteMixin):
     mime_type = Column(String(100))
     file_size = Column(Integer)
     uploaded_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    created_at = Column(String, server_default="now()")
+    created_at = Column(DateTime(timezone=True), server_default="now()")

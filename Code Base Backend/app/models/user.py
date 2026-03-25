@@ -80,7 +80,7 @@ class UserTwoFactorAuth(Base, TimestampMixin):
     is_enabled = Column(Boolean, default=False)
     secret_key = Column(String(255))
     backup_codes = Column(ARRAY(Text))
-    verified_at = Column(String)
+    verified_at = Column(DateTime(timezone=True))
 
     # Relationships
     user = relationship("User", back_populates="two_factor_auth")
@@ -116,7 +116,7 @@ class PasswordResetToken(Base):
     email = Column(String(255), nullable=False)
     otp_hash = Column(String(255))
     reset_token_hash = Column(String(255))
-    otp_expires_at = Column(String)
-    token_expires_at = Column(String)
+    otp_expires_at = Column(DateTime(timezone=True))
+    token_expires_at = Column(DateTime(timezone=True))
     is_used = Column(Boolean, default=False)
-    created_at = Column(String, server_default="now()")
+    created_at = Column(DateTime(timezone=True), server_default="now()")

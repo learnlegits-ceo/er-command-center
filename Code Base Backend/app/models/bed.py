@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, ForeignKey, Text
+from sqlalchemy import Column, String, Boolean, ForeignKey, Text, DateTime
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import relationship
 import uuid
@@ -21,7 +21,7 @@ class Bed(Base, TimestampMixin):
     status = Column(String(20), default="available")  # available, occupied, maintenance, cleaning, reserved
     features = Column(ARRAY(Text))
     current_patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id"))
-    assigned_at = Column(String)
+    assigned_at = Column(DateTime(timezone=True))
     is_active = Column(Boolean, default=True)
 
     # Relationships
@@ -41,13 +41,13 @@ class BedAssignment(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     bed_id = Column(UUID(as_uuid=True), ForeignKey("beds.id", ondelete="CASCADE"), nullable=False)
     patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False)
-    assigned_at = Column(String, server_default="now()")
+    assigned_at = Column(DateTime(timezone=True), server_default="now()")
     assigned_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    released_at = Column(String)
+    released_at = Column(DateTime(timezone=True))
     released_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     release_reason = Column(String(50))
     notes = Column(Text)
-    created_at = Column(String, server_default="now()")
+    created_at = Column(DateTime(timezone=True), server_default="now()")
 
     # Relationships
     bed = relationship("Bed", back_populates="assignments")

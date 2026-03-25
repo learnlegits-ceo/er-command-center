@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, ForeignKey
+from sqlalchemy import Column, String, Text, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
 from sqlalchemy.orm import relationship
 import uuid
@@ -24,24 +24,24 @@ class Alert(Base, TimestampMixin):
     for_user_ids = Column(ARRAY(UUID(as_uuid=True)))
     patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id", ondelete="SET NULL"))
 
-    # Extra Data
+    # Extra Data — Python attr 'extra_data' maps to SQL column 'metadata'
     extra_data = Column("metadata", JSONB)
     triggered_by = Column(String(50))
     threshold_info = Column(JSONB)
 
     # Action tracking
-    read_at = Column(String)
+    read_at = Column(DateTime(timezone=True))
     read_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    acknowledged_at = Column(String)
+    acknowledged_at = Column(DateTime(timezone=True))
     acknowledged_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     acknowledge_notes = Column(Text)
-    resolved_at = Column(String)
+    resolved_at = Column(DateTime(timezone=True))
     resolved_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     resolution = Column(Text)
 
     # Forwarding
     forwarded_to_roles = Column(ARRAY(Text))
-    forwarded_at = Column(String)
+    forwarded_at = Column(DateTime(timezone=True))
     forwarded_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     forward_notes = Column(Text)
 
@@ -65,7 +65,7 @@ class AlertHistory(Base):
     new_status = Column(String(20))
     notes = Column(Text)
     performed_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    performed_at = Column(String, server_default="now()")
+    performed_at = Column(DateTime(timezone=True), server_default="now()")
 
     # Relationships
     alert = relationship("Alert", back_populates="history")

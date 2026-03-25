@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Integer, Text, ForeignKey, Numeric, Date
+from sqlalchemy import Column, String, Boolean, Integer, Text, ForeignKey, Numeric, Date, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
 
@@ -21,7 +21,7 @@ class GroqConfiguration(Base, TimestampMixin):
     triage_prompt_template = Column(Text)
     is_active = Column(Boolean, default=True)
     usage_count = Column(Integer, default=0)
-    last_used_at = Column(String)
+    last_used_at = Column(DateTime(timezone=True))
 
 
 class MCPConfiguration(Base, TimestampMixin):
@@ -53,7 +53,7 @@ class FHIRSyncLog(Base):
     request_payload = Column(JSONB)
     response_payload = Column(JSONB)
     error_message = Column(Text)
-    synced_at = Column(String, server_default="now()")
+    synced_at = Column(DateTime(timezone=True), server_default="now()")
 
 
 class DashboardStatsCache(Base):
@@ -65,5 +65,5 @@ class DashboardStatsCache(Base):
     stat_type = Column(String(50), nullable=False)
     stat_date = Column(Date, nullable=False)
     stats_data = Column(JSONB, nullable=False)
-    generated_at = Column(String, server_default="now()")
-    expires_at = Column(String)
+    generated_at = Column(DateTime(timezone=True), server_default="now()")
+    expires_at = Column(DateTime(timezone=True))
