@@ -75,6 +75,6 @@ services:
     name: er-marketing
     env: static
     plan: free
-    rootDir: Marketing Site
+    rootDir: marketing-site
     buildCommand: echo "No build needed"
     staticPublishPath: .

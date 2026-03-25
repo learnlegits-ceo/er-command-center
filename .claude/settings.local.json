@@ -7,7 +7,11 @@
       "Bash(timeout /t 5 /nobreak)",
       "Bash(ping:*)",
       "Bash(python:*)",
-      "Bash(docker stop:*)"
+      "Bash(docker stop:*)",
+      "Bash(winget --version:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
