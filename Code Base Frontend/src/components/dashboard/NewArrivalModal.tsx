@@ -145,6 +145,19 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
         alert('Age must be a whole number between 0 and 150');
         return;
       }
+      // Validate BP if provided
+      if (formData.vitals.bp) {
+        const bpParts = formData.vitals.bp.split('/');
+        if (bpParts.length !== 2 || !bpParts[0] || !bpParts[1]) {
+          alert('Blood pressure must be in format systolic/diastolic (e.g., 120/80)');
+          return;
+        }
+        const sys = parseInt(bpParts[0]), dia = parseInt(bpParts[1]);
+        if (isNaN(sys) || isNaN(dia)) { alert('Blood pressure values must be numbers'); return; }
+        if (sys < 40 || sys > 300) { alert('Systolic BP must be between 40 and 300 mmHg'); return; }
+        if (dia < 20 || dia > 200) { alert('Diastolic BP must be between 20 and 200 mmHg'); return; }
+        if (dia >= sys) { alert('Diastolic BP must be less than systolic BP'); return; }
+      }
       const patientData: any = {
         name: trimmedName,
         age: parsedAge,
@@ -727,13 +740,17 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 p-6 border-t bg-muted/30">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={createPatient.isPending}>
+          <Button variant="outline" onClick={() => {
+            const hasData = formData.name || formData.age || formData.complaint;
+            if (hasData && !window.confirm('You have unsaved data. Are you sure you want to close?')) return;
+            onOpenChange(false);
+          }} disabled={createPatient.isPending}>
             Cancel
           </Button>
           <Button
             onClick={handleSubmit}
             className="bg-primary text-primary-foreground hover:bg-primary/90"
-            disabled={createPatient.isPending || !formData.name || !formData.complaint || !selectedDepartment}
+            disabled={createPatient.isPending || !formData.name || !formData.age || !formData.complaint || !selectedDepartment}
           >
             {createPatient.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {createPatient.isPending ? 'Registering...' : 'Run AI Triage'}

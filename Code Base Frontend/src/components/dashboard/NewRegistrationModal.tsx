@@ -103,6 +103,19 @@ export function NewRegistrationModal({ open, onOpenChange, defaultDepartmentName
         alert('Age must be a whole number between 0 and 150');
         return;
       }
+      // Validate BP if provided
+      if (formData.vitals.bp) {
+        const bpParts = formData.vitals.bp.split('/');
+        if (bpParts.length !== 2 || !bpParts[0] || !bpParts[1]) {
+          alert('Blood pressure must be in format systolic/diastolic (e.g., 120/80)');
+          return;
+        }
+        const sys = parseInt(bpParts[0]), dia = parseInt(bpParts[1]);
+        if (isNaN(sys) || isNaN(dia)) { alert('Blood pressure values must be numbers'); return; }
+        if (sys < 40 || sys > 300) { alert('Systolic BP must be between 40 and 300 mmHg'); return; }
+        if (dia < 20 || dia > 200) { alert('Diastolic BP must be between 20 and 200 mmHg'); return; }
+        if (dia >= sys) { alert('Diastolic BP must be less than systolic BP'); return; }
+      }
       const patientData: any = {
         name: trimmedName,
         age: parsedAge,

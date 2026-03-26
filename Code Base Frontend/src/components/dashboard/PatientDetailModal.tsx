@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { X, Activity, ClipboardList, MessageSquare, Camera, User, Bed, Clock, Hash, Plus, FileText, Pill, LogOut as DischargeIcon, Pencil, ArrowRight, Sparkles, ChevronDown, ChevronUp, BarChart2, FlaskConical, Users } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
@@ -123,6 +123,11 @@ function formatRecordedDate(dateStr: string | null | undefined): string {
 export function PatientDetailModal({ patient, open, onOpenChange }: PatientDetailModalProps) {
   const { user, canAddNurseNotes, canAddDoctorComments, canDischarge, canPrescribe } = useUser();
   const [activeTab, setActiveTab] = useState<'vitals' | 'triage' | 'notes' | 'doctor' | 'mar' | 'lab' | 'consult'>('vitals');
+
+  // Reset to Vitals tab when a different patient is opened
+  useEffect(() => {
+    if (patient?.id) setActiveTab('vitals');
+  }, [patient?.id]);
 
   // Fetch real vitals and triage data
   const { data: vitalsHistory, isLoading: vitalsLoading } = usePatientVitals(patient?.id || null);

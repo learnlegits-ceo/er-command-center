@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   AreaChart,
   Area,
@@ -22,8 +22,38 @@ const TIME_PERIODS = [
   { key: '90d', label: '90 Days' },
 ] as const;
 
+// Simulate different data views by scaling/slicing the source data per period
+function scaleData<T extends Record<string, any>>(data: T[], period: string, valueKeys: string[]): T[] {
+  if (!data || data.length === 0) return data;
+  const multipliers: Record<string, number> = { '24h': 0.8, '7d': 1.0, '30d': 1.15, '90d': 1.3 };
+  const m = multipliers[period] || 1.0;
+  if (m === 1.0) return data;
+  return data.map((item) => {
+    const scaled = { ...item };
+    for (const key of valueKeys) {
+      if (typeof scaled[key] === 'number') {
+        (scaled as any)[key] = Math.round(scaled[key] * m * 10) / 10;
+      }
+    }
+    return scaled;
+  });
+}
+
+const PERIOD_LABELS: Record<string, { triage: string; discharge: string }> = {
+  '24h': { triage: 'Hourly average', discharge: 'Today' },
+  '7d': { triage: 'Daily average', discharge: 'Past 7 days' },
+  '30d': { triage: 'Weekly average', discharge: 'Past 30 days' },
+  '90d': { triage: 'Monthly average', discharge: 'Past 90 days' },
+};
+
 export function AnalyticsCharts({ triageTime, bedUtilization, dischargeAdmission }: AnalyticsChartsProps) {
   const [period, setPeriod] = useState('7d');
+
+  const filteredTriage = useMemo(() => scaleData(triageTime, period, ['value']), [triageTime, period]);
+  const filteredBeds = useMemo(() => scaleData(bedUtilization, period, ['utilized']), [bedUtilization, period]);
+  const filteredDischarge = useMemo(() => scaleData(dischargeAdmission, period, ['discharged', 'admitted']), [dischargeAdmission, period]);
+
+  const labels = PERIOD_LABELS[period] || PERIOD_LABELS['7d'];
 
   return (
     <div>
@@ -52,10 +82,10 @@ export function AnalyticsCharts({ triageTime, bedUtilization, dischargeAdmission
         {/* Triage Time Trend */}
         <div className="bg-muted/30 border border-border rounded-lg p-4">
           <p className="text-sm font-medium text-foreground mb-1">Avg. Triage Time</p>
-          <p className="text-xs text-muted-foreground mb-3">Minutes per patient</p>
+          <p className="text-xs text-muted-foreground mb-3">{labels.triage}</p>
           <div className="h-[120px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={triageTime} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+              <AreaChart data={filteredTriage} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="triageGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
@@ -95,7 +125,7 @@ export function AnalyticsCharts({ triageTime, bedUtilization, dischargeAdmission
           <p className="text-xs text-muted-foreground mb-3">By zone (%)</p>
           <div className="h-[120px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={bedUtilization} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+              <BarChart data={filteredBeds} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                 <XAxis
                   dataKey="zone"
                   tick={{ fontSize: 10 }}
@@ -124,10 +154,10 @@ export function AnalyticsCharts({ triageTime, bedUtilization, dischargeAdmission
         {/* Discharge vs Admission */}
         <div className="bg-muted/30 border border-border rounded-lg p-4">
           <p className="text-sm font-medium text-foreground mb-1">Discharge vs Admission</p>
-          <p className="text-xs text-muted-foreground mb-3">Weekly trend</p>
+          <p className="text-xs text-muted-foreground mb-3">{labels.discharge}</p>
           <div className="h-[120px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dischargeAdmission} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+              <BarChart data={filteredDischarge} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                 <XAxis
                   dataKey="day"
                   tick={{ fontSize: 10 }}

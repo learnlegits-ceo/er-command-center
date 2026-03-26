@@ -22,14 +22,14 @@ export function CapacityStats({ capacity }: CapacityStatsProps) {
     {
       label: 'ER Beds',
       value: capacity.available,
-      subtitle: `of ${capacity.total} available`,
+      subtitle: `of ${capacity.total} total`,
       icon: Bed,
       color: capacity.available > 3 ? 'text-urgency-mild' : 'text-urgency-moderate',
     },
     {
       label: 'ICU/Critical',
       value: capacity.icu.available,
-      subtitle: `of ${capacity.icu.total} available`,
+      subtitle: `of ${capacity.icu.total} total`,
       icon: Activity,
       color: capacity.icu.available > 1 ? 'text-urgency-moderate' : 'text-urgency-critical',
     },

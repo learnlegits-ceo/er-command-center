@@ -187,15 +187,21 @@ async def record_vitals(
             detail="Patient not found"
         )
 
-    # Parse blood pressure if provided as string
+    # Parse blood pressure if provided as string (already validated by schema)
     bp_sys = request.blood_pressure_systolic
     bp_dia = request.blood_pressure_diastolic
     bp_str = request.bp
 
     if bp_str and "/" in bp_str:
-        parts = bp_str.split("/")
-        bp_sys = int(parts[0])
-        bp_dia = int(parts[1])
+        try:
+            parts = bp_str.split("/")
+            bp_sys = int(parts[0])
+            bp_dia = int(parts[1])
+        except (ValueError, IndexError):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid blood pressure format. Use systolic/diastolic (e.g., 120/80)"
+            )
 
     # Create vitals record
     now = datetime.utcnow()
