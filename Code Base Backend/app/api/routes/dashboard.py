@@ -81,6 +81,16 @@ async def get_dashboard_stats(
     )
     in_ward = ward_result.scalar() or 0
 
+    # Pending discharge count
+    pending_discharge_result = await db.execute(
+        select(func.count(Patient.id)).where(
+            Patient.tenant_id == tenant_id,
+            Patient.status == "ready_for_discharge",
+            Patient.deleted_at.is_(None)
+        )
+    )
+    pending_discharge = pending_discharge_result.scalar() or 0
+
     # Beds stats
     total_beds = await db.execute(
         select(func.count(Bed.id)).where(
@@ -163,7 +173,7 @@ async def get_dashboard_stats(
                 "inER": in_er,
                 "inICU": in_icu,
                 "inWard": in_ward,
-                "pendingDischarge": 0  # TODO: Implement
+                "pendingDischarge": pending_discharge
             },
             "beds": {
                 "total": beds_total,
@@ -421,5 +431,81 @@ async def get_patient_flow(
             "triage_time": triage_time,
             "bed_utilization": bed_utilization,
             "discharge_admission": discharge_admission
+        }
+    }
+
+
+@router.get("/stale-patients", response_model=dict)
+async def get_stale_patients(
+    hours_threshold: int = Query(24, description="Hours since admission to consider stale"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get patients who have been active beyond the SLA threshold and generate alerts."""
+    cutoff = datetime.utcnow() - timedelta(hours=hours_threshold)
+
+    # Find active patients admitted before the cutoff
+    result = await db.execute(
+        select(Patient).where(
+            Patient.tenant_id == current_user.tenant_id,
+            Patient.status.notin_(["discharged", "transferred_to_opd"]),
+            Patient.admitted_at < cutoff,
+            Patient.deleted_at.is_(None)
+        ).order_by(Patient.admitted_at.asc())
+    )
+    stale_patients = result.scalars().all()
+
+    stale_data = []
+    for p in stale_patients:
+        hours_waiting = int((datetime.utcnow() - p.admitted_at).total_seconds() / 3600) if p.admitted_at else 0
+        stale_data.append({
+            "id": str(p.id),
+            "patient_id": p.patient_id,
+            "name": p.name,
+            "status": p.status,
+            "priority": p.priority,
+            "priority_label": p.priority_label,
+            "hours_waiting": hours_waiting,
+            "admitted_at": p.admitted_at.isoformat() if p.admitted_at else None,
+            "department_id": str(p.department_id) if p.department_id else None,
+        })
+
+    # Auto-create alerts for critical patients waiting > threshold (if not already alerted recently)
+    alerts_created = 0
+    for sp in stale_data:
+        if sp["priority"] == 1 and sp["hours_waiting"] > hours_threshold:
+            # Check if alert already exists for this patient in the last 24 hours
+            existing_alert = await db.execute(
+                select(Alert).where(
+                    Alert.tenant_id == current_user.tenant_id,
+                    Alert.patient_id == sp["id"],
+                    Alert.triggered_by == "sla_breach",
+                    Alert.created_at > datetime.utcnow() - timedelta(hours=24)
+                )
+            )
+            if not existing_alert.scalar_one_or_none():
+                alert = Alert(
+                    tenant_id=current_user.tenant_id,
+                    title=f"SLA Breach - {sp['name']}",
+                    message=f"Critical patient {sp['name']} ({sp['patient_id']}) has been waiting {sp['hours_waiting']} hours without discharge. Immediate review required.",
+                    priority="critical",
+                    category="SLA",
+                    for_roles=["doctor", "admin"],
+                    patient_id=sp["id"],
+                    triggered_by="sla_breach"
+                )
+                db.add(alert)
+                alerts_created += 1
+
+    if alerts_created > 0:
+        await db.commit()
+
+    return {
+        "success": True,
+        "data": {
+            "stale_patients": stale_data,
+            "total": len(stale_data),
+            "alerts_created": alerts_created,
+            "threshold_hours": hours_threshold
         }
     }

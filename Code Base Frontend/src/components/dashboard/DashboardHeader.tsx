@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { useUser } from '@/contexts/UserContext';
 import { useActiveAlerts } from '@/hooks/useAlerts';
@@ -28,6 +29,14 @@ export function DashboardHeader({
   const [isDark, setIsDark] = useState(false);
   const [language, setLanguage] = useState('EN');
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
+
+  const changeLanguage = (code: string, label: string) => {
+    const langMap: Record<string, string> = { 'EN': 'en', 'HI': 'hi', 'TE': 'te' };
+    setLanguage(label);
+    i18n.changeLanguage(langMap[label] || 'en');
+    localStorage.setItem('appLanguage', langMap[label] || 'en');
+  };
   const { user, setUser } = useUser();
   const { data: alertsData } = useActiveAlerts();
   const unreadCount = alertsData?.data?.unreadCount || 0;
@@ -241,9 +250,9 @@ export function DashboardHeader({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="bg-popover border border-border shadow-lg z-50">
-            <DropdownMenuItem onClick={() => setLanguage('EN')}>English</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setLanguage('HI')}>हिंदी</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setLanguage('TE')}>తెలుగు</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => changeLanguage('en', 'EN')}>English</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => changeLanguage('hi', 'HI')}>हिंदी</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => changeLanguage('te', 'TE')}>తెలుగు</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -290,20 +299,20 @@ export function DashboardHeader({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer">
                   <User className="w-4 h-4 mr-2" />
-                  Profile
+                  {i18n.t('nav.profile')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/settings')} className="cursor-pointer">
                   <Settings className="w-4 h-4 mr-2" />
-                  Settings
+                  {i18n.t('nav.settings')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/help')} className="cursor-pointer">
                   <HelpCircle className="w-4 h-4 mr-2" />
-                  Help & Support
+                  {i18n.t('nav.help')}
                 </DropdownMenuItem>
                 {user.role === 'admin' && (
                   <DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer">
                     <UserCog className="w-4 h-4 mr-2" />
-                    Admin Panel
+                    {i18n.t('nav.admin')}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
@@ -320,7 +329,7 @@ export function DashboardHeader({
                   className="text-red-600 focus:text-red-600 cursor-pointer"
                 >
                   <LogOut className="w-4 h-4 mr-2" />
-                  Sign Out
+                  {i18n.t('nav.signOut')}
                 </DropdownMenuItem>
               </>
             ) : (

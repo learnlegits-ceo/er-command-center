@@ -470,6 +470,23 @@ async def create_patient(
             doctor_scores.sort(key=lambda x: (-x[1], x[2]))
             assigned_doctor_id = doctor_scores[0][0]
 
+    # Check for potential duplicate (same name + phone within same tenant, active status)
+    if request.phone:
+        dup_result = await db.execute(
+            select(Patient).where(
+                Patient.tenant_id == current_user.tenant_id,
+                Patient.phone == request.phone,
+                Patient.status.notin_(["discharged", "transferred_to_opd"]),
+                Patient.deleted_at.is_(None)
+            )
+        )
+        existing = dup_result.scalar_one_or_none()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Active patient with this phone number already exists: {existing.name} (ID: {existing.patient_id})"
+            )
+
     # Create patient
     patient = Patient(
         tenant_id=current_user.tenant_id,

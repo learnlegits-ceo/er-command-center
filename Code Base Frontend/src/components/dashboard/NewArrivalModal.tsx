@@ -114,25 +114,33 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
     }
   };
 
-  const handleVitalsScanUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVitalsScanUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setVitalsScan(reader.result as string);
-        // Simulate OCR extraction - in real app, call OCR API here
+    if (!file) return;
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onloadend = () => setVitalsScan(reader.result as string);
+    reader.readAsDataURL(file);
+
+    // Call backend OCR API
+    try {
+      const response = await endpoints.patients.ocrVitals(file);
+      if (response.data?.success && response.data?.data?.extracted) {
+        const extracted = response.data.data.extracted;
         setFormData({
           ...formData,
           vitals: {
-            hr: '112',
-            bp: '165/95',
-            spo2: '91',
-            temp: '37.2',
-            rr: '18'
+            hr: extracted.hr || formData.vitals.hr,
+            bp: extracted.bp || formData.vitals.bp,
+            spo2: extracted.spo2 || formData.vitals.spo2,
+            temp: extracted.temp || formData.vitals.temp,
+            rr: extracted.rr || formData.vitals.rr,
           }
         });
-      };
-      reader.readAsDataURL(file);
+      }
+    } catch {
+      alert('OCR extraction failed. Please enter vitals manually.');
     }
   };
 

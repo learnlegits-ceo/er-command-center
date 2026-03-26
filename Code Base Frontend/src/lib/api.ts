@@ -112,6 +112,13 @@ export const endpoints = {
     // Vitals
     getVitals: (id: string) => api.get(`/patients/${id}/vitals`),
     addVitals: (id: string, vitals: any) => api.post(`/patients/${id}/vitals`, vitals),
+    ocrVitals: (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return api.post('/vitals/ocr', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+    },
     // Triage Timeline
     getTriageTimeline: (id: string) => api.get(`/patients/${id}/triage-timeline`),
     recommendTriageShift: (id: string, context: any) => api.post(`/patients/${id}/recommend-triage-shift`, context),
