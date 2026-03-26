@@ -1,4 +1,5 @@
-import { Globe, Moon, Sun, User, ChevronDown, Building2, Activity, Stethoscope, LogOut, UserCog, Bell, Settings } from 'lucide-react';
+import { Globe, Moon, Sun, User, ChevronDown, Building2, Activity, Stethoscope, LogOut, UserCog, Bell, Settings, HelpCircle } from 'lucide-react';
+import { endpoints } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -295,6 +296,10 @@ export function DashboardHeader({
                   <Settings className="w-4 h-4 mr-2" />
                   Settings
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/help')} className="cursor-pointer">
+                  <HelpCircle className="w-4 h-4 mr-2" />
+                  Help & Support
+                </DropdownMenuItem>
                 {user.role === 'admin' && (
                   <DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer">
                     <UserCog className="w-4 h-4 mr-2" />
@@ -303,7 +308,12 @@ export function DashboardHeader({
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => {
+                  onClick={async () => {
+                    try {
+                      await endpoints.auth.logout();
+                    } catch {
+                      // Logout API failure is non-blocking
+                    }
                     setUser(null);
                     navigate('/login');
                   }}

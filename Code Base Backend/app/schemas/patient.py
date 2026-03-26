@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Any, Literal
 from datetime import datetime, date
 from uuid import UUID
+import re
 
 
 VALID_BLOOD_GROUPS = ("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
@@ -41,6 +42,8 @@ class PatientCreate(BaseModel):
     def name_not_blank(cls, v: str) -> str:
         if not v.strip():
             raise ValueError("Name cannot be blank")
+        if not re.match(r"^[a-zA-Z\s\-'.]+$", v.strip()):
+            raise ValueError("Name can only contain letters, spaces, hyphens, apostrophes, and periods")
         return v.strip()
 
     @field_validator("blood_group")

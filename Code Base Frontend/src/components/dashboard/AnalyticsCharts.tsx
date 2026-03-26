@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   AreaChart,
   Area,
@@ -14,11 +15,39 @@ interface AnalyticsChartsProps {
   dischargeAdmission: Array<{ day: string; discharged: number; admitted: number }>;
 }
 
+const TIME_PERIODS = [
+  { key: '24h', label: '24h' },
+  { key: '7d', label: '7 Days' },
+  { key: '30d', label: '30 Days' },
+  { key: '90d', label: '90 Days' },
+] as const;
+
 export function AnalyticsCharts({ triageTime, bedUtilization, dischargeAdmission }: AnalyticsChartsProps) {
+  const [period, setPeriod] = useState('7d');
+
   return (
     <div>
-      <h3 className="text-lg font-semibold text-foreground mb-2">Analytics (24h)</h3>
-      <p className="text-sm text-muted-foreground mb-5">Performance metrics and trends</p>
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-1">Analytics</h3>
+          <p className="text-sm text-muted-foreground">Performance metrics and trends</p>
+        </div>
+        <div className="flex gap-1 bg-muted rounded-lg p-1">
+          {TIME_PERIODS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setPeriod(key)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                period === key
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Triage Time Trend */}
         <div className="bg-muted/30 border border-border rounded-lg p-4">

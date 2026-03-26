@@ -35,8 +35,9 @@ export function useCreatePatient() {
       return response.data
     },
     onSuccess: () => {
-      // Invalidate patients list to refresh immediately across all departments
+      // Invalidate and force immediate refetch of patients list
       queryClient.invalidateQueries({ queryKey: ['patients'] })
+      queryClient.refetchQueries({ queryKey: ['patients'] })
       // Also invalidate dashboard stats and beds (auto-assign changes bed status)
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['beds'] })

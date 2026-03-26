@@ -13,6 +13,7 @@ import ForgotPassword from '@/pages/ForgotPassword'
 import Alerts from '@/pages/Alerts'
 import Profile from '@/pages/Profile'
 import Settings from '@/pages/Settings'
+import HelpSupport from '@/pages/HelpSupport'
 import PlatformDashboard from '@/pages/platform/PlatformDashboard'
 import PlatformHospitals from '@/pages/platform/PlatformHospitals'
 import HospitalOnboarding from '@/pages/platform/HospitalOnboarding'
@@ -73,6 +74,7 @@ function App() {
         <Route path="/alerts" element={<ProtectedRoute><Layout><Alerts /></Layout></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
+        <Route path="/help" element={<ProtectedRoute><Layout><HelpSupport /></Layout></ProtectedRoute>} />
         <Route path="/resources" element={<ProtectedRoute><Layout><div>Resources Page (Coming Soon)</div></Layout></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute><Layout><Admin /></Layout></ProtectedRoute>} />
 

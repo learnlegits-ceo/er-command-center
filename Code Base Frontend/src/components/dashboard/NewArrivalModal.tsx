@@ -346,7 +346,10 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                 <input
                   type="text"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^a-zA-Z\s\-'.]/g, '');
+                    setFormData({ ...formData, name: val });
+                  }}
                   className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="Enter full name"
                 />
@@ -362,7 +365,10 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                   max="150"
                   step="1"
                   value={formData.age}
-                  onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9]/g, '');
+                    setFormData({ ...formData, age: val });
+                  }}
                   className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="e.g., 45"
                 />

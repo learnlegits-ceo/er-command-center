@@ -6,24 +6,30 @@ import { endpoints } from '@/lib/api'
 
 export default function Settings() {
   const { user } = useUser()
-  const [settings, setSettings] = useState({
-    // Appearance
-    theme: 'light' as 'light' | 'dark' | 'system',
-    language: 'en',
+  const [settings, setSettings] = useState(() => {
+    const saved = localStorage.getItem('userSettings')
+    if (saved) {
+      try { return JSON.parse(saved) } catch { /* use defaults */ }
+    }
+    return {
+      // Appearance
+      theme: 'light' as 'light' | 'dark' | 'system',
+      language: 'en',
 
-    // Notifications
-    emailNotifications: true,
-    pushNotifications: true,
-    alertSound: true,
-    criticalAlertsOnly: false,
+      // Notifications
+      emailNotifications: true,
+      pushNotifications: true,
+      alertSound: true,
+      criticalAlertsOnly: false,
 
-    // Privacy
-    showOnlineStatus: true,
-    showActivityStatus: true,
+      // Privacy
+      showOnlineStatus: true,
+      showActivityStatus: true,
 
-    // Security
-    twoFactorAuth: false,
-    sessionTimeout: '30',
+      // Security
+      twoFactorAuth: false,
+      sessionTimeout: '30',
+    }
   })
 
   const [showSuccess, setShowSuccess] = useState(false)
@@ -36,6 +42,7 @@ export default function Settings() {
   const [showNewPassword, setShowNewPassword] = useState(false)
 
   const handleSave = () => {
+    localStorage.setItem('userSettings', JSON.stringify(settings))
     setShowSuccess(true)
     setTimeout(() => setShowSuccess(false), 3000)
   }

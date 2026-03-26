@@ -1,19 +1,11 @@
 import { useState, useRef } from 'react'
-import { User, Mail, Phone, Building2, Shield, Camera, Save, Stethoscope, Syringe, Upload, Video } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { User, Mail, Phone, Building2, Shield, Camera, Stethoscope, Syringe, Upload, Video } from 'lucide-react'
 import { useUser } from '@/contexts/UserContext'
 
 export default function Profile() {
   const { user, setUser } = useUser()
-  const [isEditing, setIsEditing] = useState(false)
   const [showPhotoOptions, setShowPhotoOptions] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [formData, setFormData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
-    phone: '+91 98765 43210',
-    department: user?.department || '',
-  })
 
   const getRoleIcon = () => {
     switch (user?.role) {
@@ -31,17 +23,6 @@ export default function Profile() {
       case 'admin': return 'bg-purple-100 text-purple-700'
       default: return 'bg-gray-100 text-gray-700'
     }
-  }
-
-  const handleSave = () => {
-    if (user) {
-      setUser({
-        ...user,
-        name: formData.name,
-        department: formData.department,
-      })
-    }
-    setIsEditing(false)
   }
 
   if (!user) {
@@ -148,19 +129,6 @@ export default function Profile() {
               </div>
               <p className="text-sm text-muted-foreground">{user.department}</p>
             </div>
-            <Button
-              variant={isEditing ? "default" : "outline"}
-              onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-            >
-              {isEditing ? (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Changes
-                </>
-              ) : (
-                'Edit Profile'
-              )}
-            </Button>
           </div>
         </div>
       </div>
@@ -174,16 +142,7 @@ export default function Profile() {
               <User className="w-4 h-4 inline mr-2" />
               Full Name
             </label>
-            {isEditing ? (
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            ) : (
-              <p className="text-foreground">{user.name}</p>
-            )}
+            <p className="text-foreground">{user.name}</p>
           </div>
 
           <div>
@@ -191,16 +150,7 @@ export default function Profile() {
               <Mail className="w-4 h-4 inline mr-2" />
               Email Address
             </label>
-            {isEditing ? (
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            ) : (
-              <p className="text-foreground">{formData.email}</p>
-            )}
+            <p className="text-foreground">{user.email || 'Not set'}</p>
           </div>
 
           <div>
@@ -208,16 +158,7 @@ export default function Profile() {
               <Phone className="w-4 h-4 inline mr-2" />
               Phone Number
             </label>
-            {isEditing ? (
-              <input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            ) : (
-              <p className="text-foreground">{formData.phone}</p>
-            )}
+            <p className="text-foreground">Contact admin to update</p>
           </div>
 
           <div>
@@ -225,21 +166,7 @@ export default function Profile() {
               <Building2 className="w-4 h-4 inline mr-2" />
               Department
             </label>
-            {isEditing ? (
-              <select
-                value={formData.department}
-                onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="Emergency">Emergency</option>
-                <option value="OPD">OPD</option>
-                <option value="Cardiology">Cardiology</option>
-                <option value="General Medicine">General Medicine</option>
-                <option value="Administration">Administration</option>
-              </select>
-            ) : (
-              <p className="text-foreground">{user.department}</p>
-            )}
+            <p className="text-foreground">{user.department}</p>
           </div>
         </div>
       </div>
@@ -262,14 +189,6 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Cancel button when editing */}
-      {isEditing && (
-        <div className="flex justify-end">
-          <Button variant="outline" onClick={() => setIsEditing(false)}>
-            Cancel
-          </Button>
-        </div>
-      )}
     </div>
   )
 }

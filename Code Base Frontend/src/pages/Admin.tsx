@@ -521,19 +521,13 @@ export default function Admin() {
           joinDate: created.joinedAt || new Date().toISOString().split('T')[0]
         }
 
-        setStaff([newMember, ...staff])
-        setStats(prev => ({
-          ...prev,
-          total: prev.total + 1,
-          doctors: newStaff.role === 'doctor' ? prev.doctors + 1 : prev.doctors,
-          nurses: newStaff.role === 'nurse' ? prev.nurses + 1 : prev.nurses,
-          admins: newStaff.role === 'admin' ? prev.admins + 1 : prev.admins
-        }))
         setNewStaff({ name: '', role: 'nurse', email: '', password: '', department: 'Emergency', phone: '', avatar: '' })
         setShowAddModal(false)
         setShowAvatarPicker(false)
         setCustomAvatarUrl('')
         setSuccessMsg(`${created.name} has been added successfully. They can now login with their email and password.`)
+        // Refetch full staff list from API to ensure consistency
+        await loadStaff()
       }
     } catch (err: any) {
       console.error('Failed to create staff:', err)
