@@ -1330,15 +1330,48 @@ async def add_patient_vitals(
     tenant_id = current_user.tenant_id
     old_priority = patient.priority  # Track for alert on priority change
 
+    # Validate vitals ranges before saving
+    hr_val = int(vitals_input.get("hr")) if vitals_input.get("hr") else None
+    spo2_val = float(vitals_input.get("spo2")) if vitals_input.get("spo2") else None
+    temp_val = float(vitals_input.get("temp")) if vitals_input.get("temp") else None
+    rr_val = int(vitals_input.get("rr")) if vitals_input.get("rr") else None
+    bp_str = vitals_input.get("bp")
+
+    validation_errors = []
+    if hr_val is not None and (hr_val < 20 or hr_val > 300):
+        validation_errors.append(f"Heart rate {hr_val} out of range (20-300)")
+    if spo2_val is not None and (spo2_val < 0 or spo2_val > 100):
+        validation_errors.append(f"SpO2 {spo2_val} out of range (0-100)")
+    if temp_val is not None and (temp_val < 30 or temp_val > 45):
+        validation_errors.append(f"Temperature {temp_val} out of range (30-45°C)")
+    if rr_val is not None and (rr_val < 4 or rr_val > 80):
+        validation_errors.append(f"Respiratory rate {rr_val} out of range (4-80)")
+    if bp_str and "/" in bp_str:
+        try:
+            bp_parts = bp_str.split("/")
+            bp_sys, bp_dia = int(bp_parts[0]), int(bp_parts[1])
+            if bp_sys < 40 or bp_sys > 300:
+                validation_errors.append(f"Systolic BP {bp_sys} out of range (40-300)")
+            if bp_dia < 20 or bp_dia > 200:
+                validation_errors.append(f"Diastolic BP {bp_dia} out of range (20-200)")
+        except (ValueError, IndexError):
+            validation_errors.append(f"Invalid BP format: {bp_str}")
+
+    if validation_errors:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid vitals: {'; '.join(validation_errors)}"
+        )
+
     # Create vitals record
     now_ts = datetime.utcnow()
     vitals = PatientVitals(
         patient_id=patient.id,
-        heart_rate=int(vitals_input.get("hr")) if vitals_input.get("hr") else None,
-        blood_pressure=vitals_input.get("bp"),
-        spo2=float(vitals_input.get("spo2")) if vitals_input.get("spo2") else None,
-        temperature=float(vitals_input.get("temp")) if vitals_input.get("temp") else None,
-        respiratory_rate=int(vitals_input.get("rr")) if vitals_input.get("rr") else None,
+        heart_rate=hr_val,
+        blood_pressure=bp_str,
+        spo2=spo2_val,
+        temperature=temp_val,
+        respiratory_rate=rr_val,
         recorded_by=current_user.id,
         recorded_at=now_ts,
         created_at=now_ts,

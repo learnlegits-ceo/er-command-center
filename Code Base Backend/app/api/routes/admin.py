@@ -13,6 +13,7 @@ from app.models.user import User, UserSettings
 from app.models.department import Department
 from app.models.bed import Bed
 from app.models.patient import Patient, PatientVitals
+from app.models.alert import Alert
 from app.models.audit import AuditLog
 from app.models.bed_pricing import BedTypePricing
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
@@ -978,4 +979,180 @@ async def get_usage_history(
             }
             for r in records
         ]
+    }
+
+
+@router.post("/cleanup-vitals", response_model=dict)
+async def cleanup_invalid_vitals(
+    dry_run: bool = Query(True, description="If true, only reports invalid records without fixing them"),
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Find and fix patient vitals with physiologically impossible values."""
+    result = await db.execute(
+        select(PatientVitals).where(
+            PatientVitals.patient_id.in_(
+                select(Patient.id).where(Patient.tenant_id == current_user.tenant_id)
+            )
+        )
+    )
+    all_vitals = result.scalars().all()
+
+    invalid_records = []
+    fixed_count = 0
+
+    for v in all_vitals:
+        issues = []
+        if v.heart_rate is not None and (v.heart_rate < 20 or v.heart_rate > 300):
+            issues.append(f"HR={v.heart_rate} (valid: 20-300)")
+            if not dry_run:
+                v.heart_rate = None
+        if v.spo2 is not None and (float(v.spo2) < 0 or float(v.spo2) > 100):
+            issues.append(f"SpO2={v.spo2} (valid: 0-100)")
+            if not dry_run:
+                v.spo2 = None
+        if v.temperature is not None and (float(v.temperature) < 30 or float(v.temperature) > 45):
+            issues.append(f"Temp={v.temperature} (valid: 30-45°C)")
+            if not dry_run:
+                v.temperature = None
+        if v.respiratory_rate is not None and (v.respiratory_rate < 4 or v.respiratory_rate > 80):
+            issues.append(f"RR={v.respiratory_rate} (valid: 4-80)")
+            if not dry_run:
+                v.respiratory_rate = None
+        if v.blood_pressure_systolic is not None and (v.blood_pressure_systolic < 40 or v.blood_pressure_systolic > 300):
+            issues.append(f"BP_sys={v.blood_pressure_systolic} (valid: 40-300)")
+            if not dry_run:
+                v.blood_pressure_systolic = None
+        if v.blood_pressure_diastolic is not None and (v.blood_pressure_diastolic < 20 or v.blood_pressure_diastolic > 200):
+            issues.append(f"BP_dia={v.blood_pressure_diastolic} (valid: 20-200)")
+            if not dry_run:
+                v.blood_pressure_diastolic = None
+
+        if issues:
+            invalid_records.append({
+                "vitals_id": str(v.id),
+                "patient_id": str(v.patient_id),
+                "issues": issues
+            })
+            if not dry_run:
+                fixed_count += 1
+
+    if not dry_run and fixed_count > 0:
+        await db.commit()
+
+    return {
+        "success": True,
+        "data": {
+            "total_vitals_checked": len(all_vitals),
+            "invalid_records": len(invalid_records),
+            "fixed": fixed_count if not dry_run else 0,
+            "dry_run": dry_run,
+            "details": invalid_records[:50]
+        }
+    }
+
+
+@router.delete("/patients/{patient_id}", response_model=dict)
+async def soft_delete_patient(
+    patient_id: UUID,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Soft-delete a patient record (admin only). Used to remove test/dummy data."""
+    result = await db.execute(
+        select(Patient).where(
+            Patient.id == patient_id,
+            Patient.tenant_id == current_user.tenant_id,
+            Patient.deleted_at.is_(None)
+        )
+    )
+    patient = result.scalar_one_or_none()
+
+    if not patient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patient not found"
+        )
+
+    patient.deleted_at = datetime.utcnow()
+
+    # Also release any assigned bed
+    if patient.bed_id:
+        bed_result = await db.execute(
+            select(Bed).where(Bed.id == patient.bed_id)
+        )
+        bed = bed_result.scalar_one_or_none()
+        if bed:
+            bed.status = "available"
+            bed.current_patient_id = None
+            bed.assigned_at = None
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"Patient {patient.name} ({patient.patient_id}) has been deleted."
+    }
+
+
+@router.post("/cleanup-test-data", response_model=dict)
+async def cleanup_test_data(
+    dry_run: bool = Query(True, description="If true, only reports test records without deleting them"),
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Find and soft-delete obvious test/dummy patient records."""
+    # Patterns that indicate test data
+    test_patterns = [
+        "test", "dummy", "flo3", "flow", "lappy", "gajala", "dance",
+        "muqabulla", "burger", "asdf", "qwer", "xxx", "aaa", "bbb"
+    ]
+
+    result = await db.execute(
+        select(Patient).where(
+            Patient.tenant_id == current_user.tenant_id,
+            Patient.deleted_at.is_(None)
+        )
+    )
+    all_patients = result.scalars().all()
+
+    test_patients = []
+    for p in all_patients:
+        name_lower = (p.name or "").lower().strip()
+        is_test = any(pat in name_lower for pat in test_patterns)
+        # Also flag single-word names < 4 chars that are not real names
+        if not is_test and len(name_lower) <= 3 and name_lower.isalpha():
+            is_test = True
+
+        if is_test:
+            test_patients.append({
+                "id": str(p.id),
+                "patient_id": p.patient_id,
+                "name": p.name,
+                "status": p.status
+            })
+            if not dry_run:
+                p.deleted_at = datetime.utcnow()
+                # Release bed
+                if p.bed_id:
+                    bed_result = await db.execute(
+                        select(Bed).where(Bed.id == p.bed_id)
+                    )
+                    bed = bed_result.scalar_one_or_none()
+                    if bed:
+                        bed.status = "available"
+                        bed.current_patient_id = None
+
+    if not dry_run and test_patients:
+        await db.commit()
+
+    return {
+        "success": True,
+        "data": {
+            "total_patients_checked": len(all_patients),
+            "test_patients_found": len(test_patients),
+            "deleted": len(test_patients) if not dry_run else 0,
+            "dry_run": dry_run,
+            "details": test_patients
+        }
     }
