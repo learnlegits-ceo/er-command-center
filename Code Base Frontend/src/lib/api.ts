@@ -81,6 +81,7 @@ api.interceptors.response.use(
           localStorage.removeItem('authToken')
           localStorage.removeItem('refreshToken')
           localStorage.removeItem('currentUser')
+          localStorage.setItem('sessionExpired', 'true')
           window.location.href = '/login'
           return Promise.reject(refreshError)
         } finally {
@@ -92,6 +93,7 @@ api.interceptors.response.use(
       localStorage.removeItem('authToken')
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('currentUser')
+      localStorage.setItem('sessionExpired', 'true')
       window.location.href = '/login'
     }
     return Promise.reject(error)

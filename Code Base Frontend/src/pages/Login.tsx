@@ -21,6 +21,14 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [sessionExpiredMsg, setSessionExpiredMsg] = useState(() => {
+    const expired = localStorage.getItem('sessionExpired')
+    if (expired) {
+      localStorage.removeItem('sessionExpired')
+      return 'Your session has expired. Please sign in again.'
+    }
+    return ''
+  })
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,6 +51,7 @@ export default function Login() {
           id: user.id,
           name: user.name,
           email: user.email,
+          phone: user.phone,
           role: user.role as UserRole,
           avatar: user.avatar || getDefaultAvatar(user.name, user.role),
           department: user.department || 'General'
@@ -77,6 +86,14 @@ export default function Login() {
         {/* Login Card */}
         <div className="bg-card rounded-2xl shadow-xl p-8 border border-border">
           <form onSubmit={handleLogin} className="space-y-6">
+            {/* Session Expired Message */}
+            {sessionExpiredMsg && (
+              <div className="flex items-center gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg text-orange-700">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                <span className="text-sm">{sessionExpiredMsg}</span>
+              </div>
+            )}
+
             {/* Error Message */}
             {error && (
               <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive">

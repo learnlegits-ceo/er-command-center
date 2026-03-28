@@ -158,7 +158,7 @@ export default function Profile() {
               <Phone className="w-4 h-4 inline mr-2" />
               Phone Number
             </label>
-            <p className="text-foreground">Contact admin to update</p>
+            <p className="text-foreground">{user.phone || 'Not set'}</p>
           </div>
 
           <div>

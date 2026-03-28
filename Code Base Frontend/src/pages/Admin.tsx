@@ -391,7 +391,8 @@ export default function Admin() {
         setAuditOffset(offset)
       }
     } catch {
-      // silently fail — audit log is non-critical
+      setAuditLogs([])
+      setAuditTotal(0)
     } finally {
       setAuditLoading(false)
     }
@@ -1072,7 +1073,7 @@ export default function Admin() {
 
             <div className="flex items-center justify-end gap-3 mt-6">
               <button
-                onClick={() => { setShowAddModal(false); setShowAvatarPicker(false); setError('') }}
+                onClick={() => { setShowAddModal(false); setShowAvatarPicker(false); setError(''); setNewStaff({ name: '', role: 'nurse', email: '', password: '', department: 'Emergency', phone: '', avatar: '' }); setCustomAvatarUrl('') }}
                 className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
                 disabled={isSubmitting}
               >
