@@ -23,17 +23,18 @@ export function useActiveAlerts() {
   })
 }
 
-// Helper to optimistically update an alert's status in the cached alerts list
+// Helper to optimistically update an alert's status in BOTH cached lists
+// (full list + active list/badge). Returns previous data for rollback.
 function optimisticStatusUpdate(
   queryClient: ReturnType<typeof useQueryClient>,
   alertId: string,
   newStatus: string,
   extraFields?: Record<string, string | null>
 ) {
-  // Snapshot the previous value
-  const previousData = queryClient.getQueryData(['alerts'])
+  const previousFull = queryClient.getQueryData(['alerts'])
+  const previousActive = queryClient.getQueryData(['alerts', 'active'])
 
-  // Optimistically update the cache
+  // Patch the full alerts list
   queryClient.setQueryData(['alerts'], (old: any) => {
     if (!old?.data?.alerts) return old
     return {
@@ -49,7 +50,34 @@ function optimisticStatusUpdate(
     }
   })
 
-  return previousData
+  // Patch the active alerts list (used by the header badge unreadCount)
+  queryClient.setQueryData(['alerts', 'active'], (old: any) => {
+    if (!old?.data) return old
+    const wasUnread = old.data.alerts?.find((a: any) => a.id === alertId)?.status === 'unread'
+    const willBeUnread = newStatus === 'unread'
+    const delta = wasUnread && !willBeUnread ? -1 : (!wasUnread && willBeUnread ? 1 : 0)
+    return {
+      ...old,
+      data: {
+        ...old.data,
+        unreadCount: Math.max(0, (old.data.unreadCount || 0) + delta),
+        alerts: old.data.alerts?.map((a: any) =>
+          a.id === alertId ? { ...a, status: newStatus, ...extraFields } : a
+        ),
+      },
+    }
+  })
+
+  return { previousFull, previousActive }
+}
+
+function rollbackOptimisticUpdate(
+  queryClient: ReturnType<typeof useQueryClient>,
+  context: { previousFull?: unknown; previousActive?: unknown } | undefined,
+) {
+  if (!context) return
+  if (context.previousFull !== undefined) queryClient.setQueryData(['alerts'], context.previousFull)
+  if (context.previousActive !== undefined) queryClient.setQueryData(['alerts', 'active'], context.previousActive)
 }
 
 export function useMarkAlertRead() {
@@ -62,16 +90,13 @@ export function useMarkAlertRead() {
     },
     onMutate: async (id: string) => {
       await queryClient.cancelQueries({ queryKey: ['alerts'] })
-      const previousData = optimisticStatusUpdate(queryClient, id, 'read', {
+      const context = optimisticStatusUpdate(queryClient, id, 'read', {
         readAt: new Date().toISOString(),
       })
-      return { previousData }
+      return context
     },
     onError: (_err, _id, context) => {
-      // Roll back on error
-      if (context?.previousData) {
-        queryClient.setQueryData(['alerts'], context.previousData)
-      }
+      rollbackOptimisticUpdate(queryClient, context as any)
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['alerts'] })
@@ -89,15 +114,13 @@ export function useAcknowledgeAlert() {
     },
     onMutate: async (id: string) => {
       await queryClient.cancelQueries({ queryKey: ['alerts'] })
-      const previousData = optimisticStatusUpdate(queryClient, id, 'acknowledged', {
+      const context = optimisticStatusUpdate(queryClient, id, 'acknowledged', {
         acknowledgedAt: new Date().toISOString(),
       })
-      return { previousData }
+      return context
     },
     onError: (_err, _id, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(['alerts'], context.previousData)
-      }
+      rollbackOptimisticUpdate(queryClient, context as any)
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['alerts'] })
@@ -115,15 +138,13 @@ export function useResolveAlert() {
     },
     onMutate: async (id: string) => {
       await queryClient.cancelQueries({ queryKey: ['alerts'] })
-      const previousData = optimisticStatusUpdate(queryClient, id, 'resolved', {
+      const context = optimisticStatusUpdate(queryClient, id, 'resolved', {
         resolvedAt: new Date().toISOString(),
       })
-      return { previousData }
+      return context
     },
     onError: (_err, _id, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(['alerts'], context.previousData)
-      }
+      rollbackOptimisticUpdate(queryClient, context as any)
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['alerts'] })
@@ -141,9 +162,10 @@ export function useDismissAlert() {
     },
     onMutate: async (id: string) => {
       await queryClient.cancelQueries({ queryKey: ['alerts'] })
-      const previousData = queryClient.getQueryData(['alerts'])
+      const previousFull = queryClient.getQueryData(['alerts'])
+      const previousActive = queryClient.getQueryData(['alerts', 'active'])
 
-      // Remove dismissed alert from the list
+      // Remove dismissed alert from both lists
       queryClient.setQueryData(['alerts'], (old: any) => {
         if (!old?.data?.alerts) return old
         return {
@@ -154,13 +176,23 @@ export function useDismissAlert() {
           },
         }
       })
+      queryClient.setQueryData(['alerts', 'active'], (old: any) => {
+        if (!old?.data?.alerts) return old
+        const wasUnread = old.data.alerts.find((a: any) => a.id === id)?.status === 'unread'
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            unreadCount: wasUnread ? Math.max(0, (old.data.unreadCount || 0) - 1) : old.data.unreadCount,
+            alerts: old.data.alerts.filter((a: any) => a.id !== id),
+          },
+        }
+      })
 
-      return { previousData }
+      return { previousFull, previousActive }
     },
     onError: (_err, _id, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(['alerts'], context.previousData)
-      }
+      rollbackOptimisticUpdate(queryClient, context as any)
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['alerts'] })

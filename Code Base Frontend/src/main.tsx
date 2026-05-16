@@ -5,7 +5,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { UserProvider } from './contexts/UserContext'
 import App from './App.tsx'
 import './lib/i18n'
+import { initTheme } from './lib/theme'
 import './index.css'
+
+// Apply persisted theme (light / dark / system) before first render to avoid a flash
+initTheme()
 
 const queryClient = new QueryClient({
   defaultOptions: {

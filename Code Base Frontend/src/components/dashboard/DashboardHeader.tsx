@@ -9,13 +9,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { useUser } from '@/contexts/UserContext';
 import { useActiveAlerts } from '@/hooks/useAlerts';
 import { useBeds } from '@/hooks/useBeds';
+import { getStoredTheme, resolveTheme, setTheme as persistTheme } from '@/lib/theme';
 
 interface DashboardHeaderProps {
   hospitalName?: string;
@@ -26,16 +27,31 @@ export function DashboardHeader({
   hospitalName = "Apollo Hospitals",
   departmentName = "Emergency Department – Unit A",
 }: DashboardHeaderProps) {
-  const [isDark, setIsDark] = useState(false);
-  const [language, setLanguage] = useState('EN');
+  // Initialize from persisted theme so refresh keeps the user's choice
+  const [isDark, setIsDark] = useState(() => resolveTheme(getStoredTheme()) === 'dark');
+  const initialLangCode = (typeof window !== 'undefined' && localStorage.getItem('appLanguage')) || 'en';
+  const initialLangLabel = initialLangCode === 'hi' ? 'HI' : initialLangCode === 'te' ? 'TE' : 'EN';
+  const [language, setLanguage] = useState(initialLangLabel);
   const navigate = useNavigate();
   const { i18n } = useTranslation();
 
-  const changeLanguage = (code: string, label: string) => {
+  // Keep header in sync if theme is changed elsewhere (e.g. Settings page)
+  useEffect(() => {
+    const handler = () => setIsDark(resolveTheme(getStoredTheme()) === 'dark');
+    window.addEventListener('storage', handler);
+    window.addEventListener('themechange', handler);
+    return () => {
+      window.removeEventListener('storage', handler);
+      window.removeEventListener('themechange', handler);
+    };
+  }, []);
+
+  const changeLanguage = (_code: string, label: string) => {
     const langMap: Record<string, string> = { 'EN': 'en', 'HI': 'hi', 'TE': 'te' };
+    const target = langMap[label] || 'en';
     setLanguage(label);
-    i18n.changeLanguage(langMap[label] || 'en');
-    localStorage.setItem('appLanguage', langMap[label] || 'en');
+    i18n.changeLanguage(target);
+    localStorage.setItem('appLanguage', target);
   };
   const { user, setUser } = useUser();
   const { data: alertsData } = useActiveAlerts();
@@ -59,8 +75,11 @@ export function DashboardHeader({
   const userName = user?.name || 'Guest';
 
   const toggleTheme = () => {
-    setIsDark(!isDark);
-    document.documentElement.classList.toggle('dark');
+    const next = isDark ? 'light' : 'dark';
+    persistTheme(next);
+    setIsDark(next === 'dark');
+    // Notify other components (Settings) that theme changed
+    window.dispatchEvent(new Event('themechange'));
   };
 
   const roleColors: Record<string, string> = {

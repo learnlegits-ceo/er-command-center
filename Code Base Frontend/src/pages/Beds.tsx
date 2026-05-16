@@ -193,7 +193,10 @@ export default function Beds() {
                     Bed {selectedBed.bedNumber || selectedBed.number}
                   </h3>
                   <p className="text-xs text-muted-foreground capitalize">
-                    {selectedBed.bedType || selectedBed.type || 'General'} · {selectedBed.ward || 'Ward'} · Floor {selectedBed.floor || 1}
+                    {selectedBed.bedType || selectedBed.type || 'General'} · Wing {selectedBed.wing || selectedBed.ward || '—'} · Floor {selectedBed.floor || 1}
+                    {selectedBed.department && (
+                      <> · {typeof selectedBed.department === 'string' ? selectedBed.department : selectedBed.department.name}</>
+                    )}
                   </p>
                 </div>
               </div>

@@ -22,6 +22,7 @@ from app.schemas.patient import (
 from app.schemas.common import SuccessResponse
 from app.core.dependencies import get_current_user, require_doctor, require_doctor_or_admin, require_any_staff, PaginationParams
 from app.services.triage import TriageService
+from app.services.audit import log_action
 
 router = APIRouter()
 
@@ -619,6 +620,21 @@ async def create_patient(
             assigned_by=current_user.id
         )
         db.add(bed_assignment)
+
+    await log_action(
+        db, current_user,
+        action="register",
+        entity_type="patient",
+        entity_id=patient.id,
+        new_values={
+            "name": patient.name,
+            "age": patient.age,
+            "complaint": (patient.complaint or "")[:200],
+            "priority_label": patient.priority_label,
+            "department_id": str(patient.department_id) if patient.department_id else None,
+            "bed_id": str(patient.bed_id) if patient.bed_id else None,
+        },
+    )
 
     await db.commit()
 

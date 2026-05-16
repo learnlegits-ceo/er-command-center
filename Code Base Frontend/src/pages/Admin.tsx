@@ -178,11 +178,15 @@ function UsageBillingTab() {
               <p className="text-lg font-bold">₹{plan.base_price.toLocaleString()}<span className="text-sm font-normal">/mo</span></p>
             </div>
           </div>
-          <div className="flex gap-6 mt-2 text-xs text-muted-foreground">
-            <span>{plan.included_users} users included</span>
-            <span>{plan.included_beds} beds included</span>
-            <span>₹{plan.price_per_extra_user}/extra user</span>
-            <span>₹{plan.price_per_extra_bed}/extra bed</span>
+          <div className="flex gap-6 mt-2 text-xs text-muted-foreground flex-wrap">
+            <span>{plan.included_users === 0 ? 'Unlimited users' : `${plan.included_users} users included`}</span>
+            <span>{plan.included_beds === 0 ? 'Unlimited beds' : `${plan.included_beds} beds included`}</span>
+            {plan.included_users !== 0 && plan.price_per_extra_user > 0 && (
+              <span>₹{plan.price_per_extra_user}/extra user</span>
+            )}
+            {plan.included_beds !== 0 && plan.price_per_extra_bed > 0 && (
+              <span>₹{plan.price_per_extra_bed}/extra bed</span>
+            )}
           </div>
         </div>
       )}
@@ -266,6 +270,133 @@ function UsageBillingTab() {
   )
 }
 
+// ─── Data Cleanup Section ──────────────────────────────────────────────────
+
+function DataCleanupSection({ onCleanup }: { onCleanup?: () => void }) {
+  const [busy, setBusy] = useState<'test-data' | 'vitals' | null>(null)
+  const [report, setReport] = useState<{ kind: 'test-data' | 'vitals'; count: number; details: any[] } | null>(null)
+  const [message, setMessage] = useState('')
+
+  const runDryRun = async (kind: 'test-data' | 'vitals') => {
+    setBusy(kind)
+    setMessage('')
+    setReport(null)
+    try {
+      const response = kind === 'test-data'
+        ? await endpoints.admin.cleanupTestData(true)
+        : await endpoints.admin.cleanupVitals(true)
+      const data = response.data?.data
+      const count = kind === 'test-data' ? data?.test_patients_found : data?.invalid_records
+      setReport({ kind, count: count || 0, details: data?.details || [] })
+    } catch {
+      setMessage('Failed to scan. Please try again.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const applyCleanup = async () => {
+    if (!report) return
+    setBusy(report.kind)
+    setMessage('')
+    try {
+      const response = report.kind === 'test-data'
+        ? await endpoints.admin.cleanupTestData(false)
+        : await endpoints.admin.cleanupVitals(false)
+      const data = response.data?.data
+      const deleted = report.kind === 'test-data' ? data?.deleted : data?.fixed
+      setMessage(`Done. ${deleted || 0} ${report.kind === 'test-data' ? 'patient record(s) removed' : 'vital record(s) cleaned'}.`)
+      setReport(null)
+      onCleanup?.()
+    } catch {
+      setMessage('Cleanup failed. Please try again.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div className="border rounded-lg p-4 bg-amber-50/50 border-amber-200">
+      <div className="flex items-start gap-3 mb-3">
+        <div className="p-2 bg-amber-100 rounded-lg">
+          <AlertTriangle className="w-4 h-4 text-amber-700" />
+        </div>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold text-amber-900">Data Cleanup (Admin Tools)</h3>
+          <p className="text-xs text-amber-800 mt-0.5">
+            Remove obvious test patient records or clean physiologically impossible vital signs. Each tool scans first and shows what it found before you confirm.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex gap-2 flex-wrap">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => runDryRun('test-data')}
+          disabled={busy !== null}
+          className="bg-white"
+        >
+          {busy === 'test-data' ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : null}
+          Scan for Test Patients
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => runDryRun('vitals')}
+          disabled={busy !== null}
+          className="bg-white"
+        >
+          {busy === 'vitals' ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : null}
+          Scan for Invalid Vitals
+        </Button>
+      </div>
+
+      {report && (
+        <div className="mt-3 p-3 bg-white border rounded-lg">
+          <p className="text-sm font-medium mb-2">
+            {report.kind === 'test-data'
+              ? `Found ${report.count} test/dummy patient record(s).`
+              : `Found ${report.count} vital record(s) with out-of-range values.`}
+          </p>
+          {report.count > 0 && report.details.length > 0 && (
+            <ul className="text-xs text-muted-foreground mb-3 max-h-32 overflow-y-auto space-y-0.5">
+              {report.details.slice(0, 10).map((d, i) => (
+                <li key={i}>
+                  {report.kind === 'test-data' ? `• ${d.name} (${d.patient_id})` : `• ${(d.issues || []).join(', ')}`}
+                </li>
+              ))}
+              {report.details.length > 10 && (
+                <li>… and {report.details.length - 10} more</li>
+              )}
+            </ul>
+          )}
+          <div className="flex gap-2">
+            {report.count > 0 && (
+              <Button
+                size="sm"
+                onClick={applyCleanup}
+                disabled={busy !== null}
+                className="bg-red-600 text-white hover:bg-red-700"
+              >
+                {busy ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 mr-2" />}
+                Confirm Cleanup
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => setReport(null)}>
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {message && (
+        <p className="mt-2 text-xs text-green-700 font-medium">{message}</p>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Admin Component ──────────────────────────────────────────────────
 
 export default function Admin() {
@@ -277,6 +408,8 @@ export default function Admin() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null)
+  const [deletingStaff, setDeletingStaff] = useState<StaffMember | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
   const [newStaff, setNewStaff] = useState({
     name: '',
     role: 'nurse' as UserRole,
@@ -565,29 +698,31 @@ export default function Admin() {
     }
   }
 
-  const handleDeleteStaff = async (id: string) => {
-    if (!confirm('Are you sure you want to remove this staff member?')) return
-
+  const handleDeleteStaff = async () => {
+    if (!deletingStaff) return
+    setDeleteLoading(true)
     try {
-      const response = await endpoints.admin.deleteStaff(id)
+      const response = await endpoints.admin.deleteStaff(deletingStaff.id)
       if (response.data.success) {
-        const deleted = staff.find(s => s.id === id)
-        setStaff(staff.filter(s => s.id !== id))
-        if (deleted) {
-          setStats(prev => ({
-            ...prev,
-            total: prev.total - 1,
-            doctors: deleted.role === 'doctor' ? prev.doctors - 1 : prev.doctors,
-            nurses: deleted.role === 'nurse' ? prev.nurses - 1 : prev.nurses,
-            admins: deleted.role === 'admin' ? prev.admins - 1 : prev.admins
-          }))
-        }
-        setSuccessMsg('Staff member removed successfully.')
+        const deleted = deletingStaff
+        setStaff(staff.filter(s => s.id !== deletingStaff.id))
+        setStats(prev => ({
+          ...prev,
+          total: prev.total - 1,
+          doctors: deleted.role === 'doctor' ? prev.doctors - 1 : prev.doctors,
+          nurses: deleted.role === 'nurse' ? prev.nurses - 1 : prev.nurses,
+          admins: deleted.role === 'admin' ? prev.admins - 1 : prev.admins
+        }))
+        setSuccessMsg(`${deleted.name} has been removed successfully.`)
+        setDeletingStaff(null)
       }
     } catch (err: any) {
       console.error('Failed to delete staff:', err)
       const errorMessage = err.response?.data?.detail || 'Failed to remove staff member.'
       setError(errorMessage)
+      setDeletingStaff(null)
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -815,7 +950,7 @@ export default function Admin() {
                             <Edit2 className="w-4 h-4 text-muted-foreground" />
                           </button>
                           <button
-                            onClick={() => handleDeleteStaff(member.id)}
+                            onClick={() => setDeletingStaff(member)}
                             className="p-1.5 hover:bg-red-100 rounded-lg transition-colors"
                             title="Delete"
                           >
@@ -1346,6 +1481,9 @@ export default function Admin() {
             </div>
           </div>
 
+          {/* Data Cleanup — admin tools to remove test patients and invalid vitals */}
+          <DataCleanupSection onCleanup={() => loadAuditLogs(0, auditEntityFilter)} />
+
           {/* Entity type filter */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium text-muted-foreground">Filter by type:</span>
@@ -1459,6 +1597,59 @@ export default function Admin() {
       {/* ── USAGE & BILLING TAB ── */}
       {activeAdminTab === 'usage-billing' && (
         <UsageBillingTab />
+      )}
+
+      {/* Delete Staff Confirmation Modal */}
+      {deletingStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card rounded-lg shadow-xl w-full max-w-md p-6">
+            <div className="flex items-start gap-4 mb-4">
+              <div className="p-2 bg-red-100 rounded-full">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-foreground">Remove Staff Member</h3>
+                <p className="text-sm text-muted-foreground mt-1">This action cannot be undone.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg mb-4">
+              <img src={deletingStaff.avatar} alt={deletingStaff.name} className="w-10 h-10 rounded-full object-cover bg-muted" />
+              <div>
+                <p className="text-sm font-medium text-foreground">{deletingStaff.name}</p>
+                <p className="text-xs text-muted-foreground">{deletingStaff.email} · {deletingStaff.role}</p>
+              </div>
+            </div>
+            <p className="text-sm text-foreground mb-4">
+              Are you sure you want to remove <span className="font-semibold">{deletingStaff.name}</span>? They will lose access to the system immediately.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setDeletingStaff(null)}
+                disabled={deleteLoading}
+                className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+              <Button
+                onClick={handleDeleteStaff}
+                disabled={deleteLoading}
+                className="bg-red-600 text-white hover:bg-red-700"
+              >
+                {deleteLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Removing...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Remove Staff Member
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Contact Police Modal */}

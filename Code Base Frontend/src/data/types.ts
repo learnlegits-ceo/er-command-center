@@ -13,10 +13,12 @@ export interface Patient {
   complaint: string
   admittedAt: string
   dischargedAt?: string
-  department?: { name: string }
-  assignedDoctor?: { name: string }
-  assignedNurse?: { name: string }
-  bed?: { bedNumber: string }
+  // Backend may serialize these as the plain string name or as a nested {name} object
+  department?: string | { name: string }
+  assignedDoctor?: string | { name: string }
+  assignedNurse?: string | { name: string }
+  bed?: string | { bedNumber: string }
+  bedId?: string
   photo?: string | null
   vitals?: Vitals
   // Legacy fields for backward compatibility
@@ -48,8 +50,10 @@ export interface Bed {
   bedType: 'icu' | 'general' | 'isolation' | 'emergency'
   status: 'available' | 'occupied' | 'maintenance' | 'cleaning'
   floor: string
-  ward: string
-  department?: { name: string }
+  ward?: string
+  wing?: string
+  // Backend may serialize this as the plain string name or as a nested {name} object
+  department?: string | { name: string }
   patient?: {
     id: string
     patientId: string

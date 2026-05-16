@@ -202,6 +202,13 @@ export const endpoints = {
     getPatientFlow: () => api.get('/dashboard/patient-flow'),
   },
 
+  // User profile (current user)
+  users: {
+    getMe: () => api.get('/users/me'),
+    updateMe: (data: { name?: string; phone?: string; department_id?: string; specialization?: string }) =>
+      api.put('/users/me', data),
+  },
+
   // Authentication
   auth: {
     login: (credentials: { email: string; password: string }) => api.post('/auth/login', credentials),
@@ -250,6 +257,12 @@ export const endpoints = {
     // Usage
     getUsage: () => api.get('/admin/usage'),
     getUsageHistory: () => api.get('/admin/usage/history'),
+    // Data cleanup
+    cleanupTestData: (dryRun: boolean = true) =>
+      api.post('/admin/cleanup-test-data', null, { params: { dry_run: dryRun } }),
+    cleanupVitals: (dryRun: boolean = true) =>
+      api.post('/admin/cleanup-vitals', null, { params: { dry_run: dryRun } }),
+    deletePatient: (id: string) => api.delete(`/admin/patients/${id}`),
   },
 
   // Hospital billing

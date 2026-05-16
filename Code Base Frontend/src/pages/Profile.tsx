@@ -1,11 +1,37 @@
-import { useState, useRef } from 'react'
-import { User, Mail, Phone, Building2, Shield, Camera, Stethoscope, Syringe, Upload, Video } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { User, Mail, Phone, Building2, Shield, Camera, Stethoscope, Syringe, Upload, Video, Pencil, Check, X, Loader2 } from 'lucide-react'
 import { useUser } from '@/contexts/UserContext'
+import { Button } from '@/components/ui/button'
+import { endpoints } from '@/lib/api'
 
 export default function Profile() {
   const { user, setUser } = useUser()
   const [showPhotoOptions, setShowPhotoOptions] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Edit state
+  const [isEditing, setIsEditing] = useState(false)
+  const [draftName, setDraftName] = useState('')
+  const [draftPhone, setDraftPhone] = useState('')
+  const [saveLoading, setSaveLoading] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [saveSuccess, setSaveSuccess] = useState(false)
+
+  // Reset draft fields when the underlying user changes (e.g. after save)
+  useEffect(() => {
+    if (user) {
+      setDraftName(user.name || '')
+      setDraftPhone(user.phone || '')
+    }
+  }, [user?.name, user?.phone])
+
+  // Auto-dismiss success toast
+  useEffect(() => {
+    if (saveSuccess) {
+      const t = setTimeout(() => setSaveSuccess(false), 3000)
+      return () => clearTimeout(t)
+    }
+  }, [saveSuccess])
 
   const getRoleIcon = () => {
     switch (user?.role) {
@@ -25,6 +51,50 @@ export default function Profile() {
     }
   }
 
+  const handleSave = async () => {
+    setSaveError('')
+    const name = draftName.trim()
+    if (!name || name.length < 2) {
+      setSaveError('Name must be at least 2 characters')
+      return
+    }
+    // Phone is optional; if entered, must be 10 digits (allowing +91 prefix)
+    const phoneDigits = (draftPhone || '').replace(/^\+91\s*/, '').replace(/\D/g, '')
+    if (phoneDigits.length > 0 && phoneDigits.length !== 10) {
+      setSaveError('Phone number must be exactly 10 digits')
+      return
+    }
+    const normalizedPhone = phoneDigits ? `+91 ${phoneDigits}` : ''
+
+    setSaveLoading(true)
+    try {
+      const response = await endpoints.users.updateMe({
+        name,
+        phone: normalizedPhone || undefined,
+      })
+      if (response.data?.success) {
+        if (user) {
+          setUser({ ...user, name, phone: normalizedPhone })
+        }
+        setIsEditing(false)
+        setSaveSuccess(true)
+      } else {
+        setSaveError('Failed to save profile. Please try again.')
+      }
+    } catch (err: any) {
+      setSaveError(err?.response?.data?.detail || 'Failed to save profile. Please try again.')
+    } finally {
+      setSaveLoading(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setDraftName(user?.name || '')
+    setDraftPhone(user?.phone || '')
+    setSaveError('')
+    setIsEditing(false)
+  }
+
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -39,11 +109,44 @@ export default function Profile() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {/* Success toast */}
+      {saveSuccess && (
+        <div className="fixed top-4 right-4 z-50 px-4 py-3 bg-green-100 text-green-700 border border-green-200 rounded-lg text-sm font-medium shadow-lg">
+          Profile updated successfully!
+        </div>
+      )}
+
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">My Profile</h1>
-        <p className="text-sm text-muted-foreground">Manage your account information</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">My Profile</h1>
+          <p className="text-sm text-muted-foreground">Manage your account information</p>
+        </div>
+        {!isEditing ? (
+          <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
+            <Pencil className="w-4 h-4 mr-2" />
+            Edit Profile
+          </Button>
+        ) : (
+          <div className="flex gap-2">
+            <Button onClick={handleCancelEdit} variant="ghost" size="sm" disabled={saveLoading}>
+              <X className="w-4 h-4 mr-2" />
+              Cancel
+            </Button>
+            <Button onClick={handleSave} size="sm" disabled={saveLoading}>
+              {saveLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+              {saveLoading ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        )}
       </div>
+
+      {/* Inline error */}
+      {saveError && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {saveError}
+        </div>
+      )}
 
       {/* Profile Card */}
       <div className="bg-card border rounded-lg overflow-hidden">
@@ -101,7 +204,6 @@ export default function Profile() {
                   </button>
                   <button
                     onClick={() => {
-                      // Request camera access
                       navigator.mediaDevices?.getUserMedia({ video: true })
                         .then(() => {
                           alert('Camera access granted! In a full implementation, this would open a camera capture modal.')
@@ -142,7 +244,18 @@ export default function Profile() {
               <User className="w-4 h-4 inline mr-2" />
               Full Name
             </label>
-            <p className="text-foreground">{user.name}</p>
+            {isEditing ? (
+              <input
+                type="text"
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value.replace(/[^a-zA-Z\s\-'.]/g, ''))}
+                className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                placeholder="Enter your full name"
+                autoFocus
+              />
+            ) : (
+              <p className="text-foreground">{user.name}</p>
+            )}
           </div>
 
           <div>
@@ -151,6 +264,11 @@ export default function Profile() {
               Email Address
             </label>
             <p className="text-foreground">{user.email || 'Not set'}</p>
+            {isEditing && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Email cannot be changed. Contact your admin if you need to update it.
+              </p>
+            )}
           </div>
 
           <div>
@@ -158,7 +276,26 @@ export default function Profile() {
               <Phone className="w-4 h-4 inline mr-2" />
               Phone Number
             </label>
-            <p className="text-foreground">{user.phone || 'Not set'}</p>
+            {isEditing ? (
+              <div className="flex">
+                <span className="inline-flex items-center px-3 py-2 bg-muted border border-r-0 border-input rounded-l-lg text-sm text-muted-foreground font-medium">
+                  +91
+                </span>
+                <input
+                  type="tel"
+                  value={draftPhone.replace(/^\+91\s*/, '')}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10)
+                    setDraftPhone(`+91 ${digits}`)
+                  }}
+                  className="w-full px-3 py-2 bg-background border border-input rounded-r-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                  placeholder="98765 43210"
+                  maxLength={10}
+                />
+              </div>
+            ) : (
+              <p className="text-foreground">{user.phone || 'Not set'}</p>
+            )}
           </div>
 
           <div>
@@ -167,6 +304,11 @@ export default function Profile() {
               Department
             </label>
             <p className="text-foreground">{user.department}</p>
+            {isEditing && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Department changes must be made by an admin.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -188,7 +330,6 @@ export default function Profile() {
           </div>
         </div>
       </div>
-
     </div>
   )
 }

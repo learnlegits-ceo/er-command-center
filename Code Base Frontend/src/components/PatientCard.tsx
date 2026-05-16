@@ -12,10 +12,17 @@ export function PatientCard({ patient, onClick }: PatientCardProps) {
   // Get patient data with fallbacks for legacy fields
   const patientIdDisplay = patient.patientId || patient.medicalRecordNumber || 'N/A'
   const complaintDisplay = patient.complaint || patient.chiefComplaint || 'Not specified'
-  const bedDisplay = patient.bed?.bedNumber || patient.assignedBed
+  // bed can come from backend as a string (bed_number) or as a nested object
+  const bedDisplay = typeof patient.bed === 'string'
+    ? patient.bed
+    : patient.bed?.bedNumber || patient.assignedBed
   const doctorDisplay = typeof patient.assignedDoctor === 'string'
     ? patient.assignedDoctor
     : patient.assignedDoctor?.name
+  // department can come from backend as a plain string OR a nested {name} object
+  const departmentDisplay = typeof patient.department === 'string'
+    ? patient.department
+    : patient.department?.name
 
   // Priority label
   const priorityLabel = patient.priorityLabel || getPriorityLabel(patient.priority)
@@ -84,10 +91,10 @@ export function PatientCard({ patient, onClick }: PatientCardProps) {
               <span className="font-medium">{doctorDisplay}</span>
             </div>
           )}
-          {patient.department && (
+          {departmentDisplay && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Department:</span>
-              <span className="font-medium">{patient.department.name}</span>
+              <span className="font-medium">{departmentDisplay}</span>
             </div>
           )}
           {patient.vitals && (

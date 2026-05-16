@@ -133,6 +133,13 @@ export default function Patients() {
           >
             Pending
           </Button>
+          <Button
+            variant={filterStatus === 'discharged' ? 'default' : 'outline'}
+            onClick={() => setFilterStatus('discharged')}
+            size="sm"
+          >
+            Discharged
+          </Button>
         </div>
       </div>
 

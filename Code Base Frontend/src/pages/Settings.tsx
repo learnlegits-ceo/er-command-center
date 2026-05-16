@@ -1,36 +1,52 @@
-import { useState } from 'react'
-import { Bell, Lock, Globe, Moon, Sun, Monitor, Volume2, VolumeX, Eye, EyeOff, Save } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Bell, Lock, Moon, Sun, Monitor, Volume2, VolumeX, Eye, EyeOff, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useUser } from '@/contexts/UserContext'
 import { endpoints } from '@/lib/api'
+import { getStoredTheme, setTheme as persistTheme, Theme } from '@/lib/theme'
 
 export default function Settings() {
   const { user } = useUser()
+  const { i18n } = useTranslation()
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('userSettings')
-    if (saved) {
-      try { return JSON.parse(saved) } catch { /* use defaults */ }
-    }
+    const parsed = saved ? (() => { try { return JSON.parse(saved) } catch { return null } })() : null
+    // Theme + language live in their own keys so they survive Settings being unsaved;
+    // Settings page hydrates the rest, but reads theme/language from authoritative sources.
     return {
-      // Appearance
-      theme: 'light' as 'light' | 'dark' | 'system',
-      language: 'en',
+      // Appearance — authoritative sources are appTheme + appLanguage
+      theme: getStoredTheme() as Theme,
+      language: (typeof window !== 'undefined' && localStorage.getItem('appLanguage')) || parsed?.language || 'en',
 
       // Notifications
-      emailNotifications: true,
-      pushNotifications: true,
-      alertSound: true,
-      criticalAlertsOnly: false,
+      emailNotifications: parsed?.emailNotifications ?? true,
+      pushNotifications: parsed?.pushNotifications ?? true,
+      alertSound: parsed?.alertSound ?? true,
+      criticalAlertsOnly: parsed?.criticalAlertsOnly ?? false,
 
       // Privacy
-      showOnlineStatus: true,
-      showActivityStatus: true,
+      showOnlineStatus: parsed?.showOnlineStatus ?? true,
+      showActivityStatus: parsed?.showActivityStatus ?? true,
 
       // Security
-      twoFactorAuth: false,
-      sessionTimeout: '30',
+      sessionTimeout: parsed?.sessionTimeout || '30',
     }
   })
+
+  // Apply theme changes immediately as user clicks (preview), and persist via dedicated key
+  useEffect(() => {
+    persistTheme(settings.theme as Theme)
+    window.dispatchEvent(new Event('themechange'))
+  }, [settings.theme])
+
+  // Sync language change with i18n immediately
+  useEffect(() => {
+    if (i18n.language !== settings.language) {
+      i18n.changeLanguage(settings.language)
+      localStorage.setItem('appLanguage', settings.language)
+    }
+  }, [settings.language, i18n])
 
   const [showSuccess, setShowSuccess] = useState(false)
   const [passwordError, setPasswordError] = useState('')
@@ -153,7 +169,9 @@ export default function Settings() {
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium text-foreground">Language</p>
-              <p className="text-sm text-muted-foreground">Choose your preferred language</p>
+              <p className="text-sm text-muted-foreground">
+                Choose your preferred language. Note: translation coverage is gradually rolling out — core navigation is translated; clinical content remains in English.
+              </p>
             </div>
             <select
               value={settings.language}
@@ -255,14 +273,11 @@ export default function Settings() {
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium text-foreground">Two-Factor Authentication</p>
-              <p className="text-sm text-muted-foreground">Coming soon</p>
+              <p className="text-sm text-muted-foreground">Add an extra layer of security to your account.</p>
             </div>
-            <button
-              disabled
-              className="relative w-12 h-6 rounded-full bg-muted opacity-50 cursor-not-allowed"
-            >
-              <span className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full" />
-            </button>
+            <span className="px-3 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+              Coming soon
+            </span>
           </div>
 
           <div className="flex items-center justify-between">

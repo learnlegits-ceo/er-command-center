@@ -13,6 +13,7 @@ from app.models.patient import Patient
 from app.schemas.bed import BedResponse, BedAssignRequest, BedStatusUpdate
 from app.schemas.common import SuccessResponse
 from app.core.dependencies import get_current_user
+from app.services.audit import log_action
 
 router = APIRouter()
 
@@ -141,7 +142,17 @@ async def update_bed_status(
             detail="Bed not found"
         )
 
+    old_status = bed.status
     bed.status = request.status
+
+    await log_action(
+        db, current_user,
+        action="update_status",
+        entity_type="bed",
+        entity_id=bed.id,
+        old_values={"status": old_status},
+        new_values={"status": bed.status, "bed_number": bed.bed_number},
+    )
     await db.commit()
 
     return {
@@ -224,6 +235,18 @@ async def assign_bed(
     )
     db.add(assignment)
 
+    await log_action(
+        db, current_user,
+        action="assign_bed",
+        entity_type="bed",
+        entity_id=bed.id,
+        new_values={
+            "bed_number": bed.bed_number,
+            "patient_id": str(patient.id),
+            "patient_name": patient.name,
+        },
+    )
+
     await db.commit()
 
     return {
@@ -279,9 +302,18 @@ async def release_bed(
         bed.current_patient.bed_id = None
 
     # Release bed — make available immediately
+    released_patient_name = bed.current_patient.name if bed.current_patient else None
     bed.status = "available"
     bed.current_patient_id = None
     bed.assigned_at = None
+
+    await log_action(
+        db, current_user,
+        action="release_bed",
+        entity_type="bed",
+        entity_id=bed.id,
+        new_values={"bed_number": bed.bed_number, "released_patient": released_patient_name},
+    )
 
     await db.commit()
 

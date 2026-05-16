@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Upload, Camera, User, Video, AlertTriangle, Shield, Phone, Loader2, Building2, Stethoscope, Bed, SwitchCamera } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { X, Upload, Camera, User, Video, AlertTriangle, Shield, Phone, Loader2, Building2, Stethoscope, Bed, SwitchCamera, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCreatePatient } from '@/hooks/usePatients';
 import { useDepartments, useDepartmentDoctors } from '@/hooks/useDepartments';
@@ -18,6 +19,27 @@ function dataURLtoFile(dataUrl: string, filename: string): File {
   return new File([u8arr], filename, { type: mime });
 }
 
+// Department name → URL slug (must mirror Dashboard.tsx unitToDepartment / Layout.tsx)
+const departmentNameToPath: Record<string, string> = {
+  'Emergency Department - Unit A': '/emergency/unit-a',
+  'Emergency Department - Unit B': '/emergency/unit-b',
+  'Emergency Care Unit': '/emergency/care-unit',
+  'Trauma Center': '/emergency/trauma',
+  'Intensive Care Unit': '/emergency/icu',
+  'General Ward': '/emergency/general-ward',
+  'Pediatrics': '/emergency/pediatrics',
+  'Cardiology': '/opd/cardiology',
+  'Outpatient Department': '/opd/general',
+};
+
+// Vital sign range validators (clinical bounds)
+const VITAL_RANGES = {
+  hr: { min: 20, max: 300, label: 'Heart Rate', unit: 'bpm' },
+  spo2: { min: 50, max: 100, label: 'SpO₂', unit: '%' },
+  temp: { min: 30, max: 45, label: 'Temperature', unit: '°C' },
+  rr: { min: 4, max: 80, label: 'Respiratory Rate', unit: '/min' },
+};
+
 interface NewArrivalModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -25,14 +47,21 @@ interface NewArrivalModalProps {
 }
 
 export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: NewArrivalModalProps) {
+  const navigate = useNavigate();
   const [patientPhoto, setPatientPhoto] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [vitalsScan, setVitalsScan] = useState<string | null>(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const vitalsScanInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+
+  // Per-field validation errors
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string>('');
 
   const startCamera = async (facing: 'user' | 'environment') => {
     // Stop any existing stream
@@ -123,56 +152,128 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
     reader.onloadend = () => setVitalsScan(reader.result as string);
     reader.readAsDataURL(file);
 
-    // Call backend OCR API
+    setOcrLoading(true);
     try {
       const response = await endpoints.patients.ocrVitals(file);
       if (response.data?.success && response.data?.data?.extracted) {
         const extracted = response.data.data.extracted;
-        setFormData({
-          ...formData,
+        setFormData((prev) => ({
+          ...prev,
           vitals: {
-            hr: extracted.hr || formData.vitals.hr,
-            bp: extracted.bp || formData.vitals.bp,
-            spo2: extracted.spo2 || formData.vitals.spo2,
-            temp: extracted.temp || formData.vitals.temp,
-            rr: extracted.rr || formData.vitals.rr,
+            hr: extracted.hr || prev.vitals.hr,
+            bp: extracted.bp || prev.vitals.bp,
+            spo2: extracted.spo2 || prev.vitals.spo2,
+            temp: extracted.temp || prev.vitals.temp,
+            rr: extracted.rr || prev.vitals.rr,
           }
-        });
+        }));
+      } else {
+        alert('OCR could not extract vitals. Please enter manually.');
       }
     } catch {
       alert('OCR extraction failed. Please enter vitals manually.');
+    } finally {
+      setOcrLoading(false);
+      // Clear the file input so the same file can be re-selected
+      if (vitalsScanInputRef.current) vitalsScanInputRef.current.value = '';
     }
   };
 
+  // Validate all required fields and vitals ranges — returns true if valid
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    const trimmedName = formData.name.trim();
+    if (!trimmedName) errors.name = 'Patient name is required';
+    else if (trimmedName.length < 2) errors.name = 'Name must be at least 2 characters';
+
+    const parsedAge = parseInt(formData.age);
+    if (!formData.age) errors.age = 'Age is required';
+    else if (isNaN(parsedAge) || parsedAge < 0 || parsedAge > 150) {
+      errors.age = 'Age must be a whole number between 0 and 150';
+    }
+
+    if (!formData.complaint.trim()) errors.complaint = 'Chief complaint is required';
+
+    if (!selectedDepartment) errors.department = 'Department is required';
+
+    // Phone (optional, but if entered must be 10 digits)
+    const phoneDigits = formData.phone.replace(/^\+91\s*/, '').replace(/\D/g, '');
+    if (phoneDigits.length > 0 && phoneDigits.length !== 10) {
+      errors.phone = 'Phone number must be exactly 10 digits';
+    }
+
+    // Vitals (optional, but if entered must be in valid range)
+    const { hr, bp, spo2, temp, rr } = formData.vitals;
+    if (hr) {
+      const v = parseInt(hr);
+      if (isNaN(v) || v < VITAL_RANGES.hr.min || v > VITAL_RANGES.hr.max) {
+        errors.vitalsHr = `Heart Rate must be ${VITAL_RANGES.hr.min}–${VITAL_RANGES.hr.max} bpm`;
+      }
+    }
+    if (spo2) {
+      const v = parseFloat(spo2);
+      if (isNaN(v) || v < VITAL_RANGES.spo2.min || v > VITAL_RANGES.spo2.max) {
+        errors.vitalsSpo2 = `SpO₂ must be ${VITAL_RANGES.spo2.min}–${VITAL_RANGES.spo2.max}%`;
+      }
+    }
+    if (temp) {
+      const v = parseFloat(temp);
+      if (isNaN(v) || v < VITAL_RANGES.temp.min || v > VITAL_RANGES.temp.max) {
+        errors.vitalsTemp = `Temperature must be ${VITAL_RANGES.temp.min}–${VITAL_RANGES.temp.max}°C`;
+      }
+    }
+    if (rr) {
+      const v = parseInt(rr);
+      if (isNaN(v) || v < VITAL_RANGES.rr.min || v > VITAL_RANGES.rr.max) {
+        errors.vitalsRr = `Respiratory Rate must be ${VITAL_RANGES.rr.min}–${VITAL_RANGES.rr.max} /min`;
+      }
+    }
+    if (bp) {
+      const parts = bp.split('/');
+      if (parts.length !== 2 || !parts[0] || !parts[1]) {
+        errors.vitalsBp = 'Blood pressure must be systolic/diastolic (e.g., 120/80)';
+      } else {
+        const sys = parseInt(parts[0]);
+        const dia = parseInt(parts[1]);
+        if (isNaN(sys) || isNaN(dia)) errors.vitalsBp = 'BP values must be numbers';
+        else if (sys < 40 || sys > 300) errors.vitalsBp = 'Systolic BP must be 40–300 mmHg';
+        else if (dia < 20 || dia > 200) errors.vitalsBp = 'Diastolic BP must be 20–200 mmHg';
+        else if (dia >= sys) errors.vitalsBp = 'Diastolic BP must be less than systolic';
+      }
+    }
+
+    if (isPoliceCase && !policeCaseType) {
+      errors.policeCaseType = 'Case type is required for police/MLC cases';
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = async () => {
+    setSubmitError('');
+    if (!validateForm()) {
+      setSubmitError('Please fix the highlighted errors before submitting.');
+      // Scroll to first error
+      setTimeout(() => {
+        const firstError = document.querySelector('[data-field-error="true"]');
+        if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 50);
+      return;
+    }
+
     try {
-      // Prepare patient data for API (backend expects string values for vitals)
       const trimmedName = formData.name.trim();
       const parsedAge = parseInt(formData.age);
-      if (parsedAge < 0 || parsedAge > 150 || isNaN(parsedAge)) {
-        alert('Age must be a whole number between 0 and 150');
-        return;
-      }
-      // Validate BP if provided
-      if (formData.vitals.bp) {
-        const bpParts = formData.vitals.bp.split('/');
-        if (bpParts.length !== 2 || !bpParts[0] || !bpParts[1]) {
-          alert('Blood pressure must be in format systolic/diastolic (e.g., 120/80)');
-          return;
-        }
-        const sys = parseInt(bpParts[0]), dia = parseInt(bpParts[1]);
-        if (isNaN(sys) || isNaN(dia)) { alert('Blood pressure values must be numbers'); return; }
-        if (sys < 40 || sys > 300) { alert('Systolic BP must be between 40 and 300 mmHg'); return; }
-        if (dia < 20 || dia > 200) { alert('Diastolic BP must be between 20 and 200 mmHg'); return; }
-        if (dia >= sys) { alert('Diastolic BP must be less than systolic BP'); return; }
-      }
+
       const patientData: any = {
         name: trimmedName,
         age: parsedAge,
         gender: formData.gender,
         blood_group: formData.bloodGroup || undefined,
         phone: formData.phone || undefined,
-        complaint: formData.complaint,
+        complaint: formData.complaint.trim(),
         is_police_case: isPoliceCase,
         police_case_type: policeCaseType || undefined,
         department_id: selectedDepartment || undefined,
@@ -194,7 +295,6 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
       if (photoFile && createdPatientId) {
         try {
           await endpoints.patients.uploadPhoto(createdPatientId, photoFile);
-          // Re-invalidate patients query so the queue shows the photo
           queryClient.invalidateQueries({ queryKey: ['patients'] });
         } catch (photoError) {
           console.error('Failed to upload photo:', photoError);
@@ -216,21 +316,21 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
         }
       }
 
+      // Resolve the selected department name → URL slug; navigate if different from current page
+      const selectedDeptObj = departments?.find((d) => d.id === selectedDepartment);
+      const selectedDeptName = selectedDeptObj?.name;
+      const targetPath = selectedDeptName ? departmentNameToPath[selectedDeptName] : undefined;
+      const onDifferentDept = selectedDeptName && defaultDepartmentName && selectedDeptName !== defaultDepartmentName;
+
       // Reset form and close modal
       setFormData({
         name: '',
         age: '',
         gender: 'M',
         bloodGroup: '',
-        phone: '',
+        phone: '+91 ',
         complaint: '',
-        vitals: {
-          hr: '',
-          bp: '',
-          spo2: '',
-          temp: '',
-          rr: ''
-        }
+        vitals: { hr: '', bp: '', spo2: '', temp: '', rr: '' }
       });
       setPatientPhoto(null);
       setPhotoFile(null);
@@ -241,11 +341,23 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
       setPoliceAlertError('');
       setSelectedDepartment('');
       setSelectedDoctor('');
+      setFieldErrors({});
       onOpenChange(false);
-    } catch (error) {
+
+      // Navigate to the department the patient was registered into, so the user sees them
+      if (onDifferentDept && targetPath) {
+        navigate(targetPath);
+      }
+    } catch (error: any) {
       console.error('Failed to register patient:', error);
+      const detail = error?.response?.data?.detail;
+      setSubmitError(typeof detail === 'string' ? detail : 'Failed to register patient. Please try again.');
     }
   };
+
+  // Reusable error helper component
+  const ErrorMsg = ({ msg }: { msg?: string }) =>
+    msg ? <p data-field-error="true" className="text-xs text-red-600 mt-1">{msg}</p> : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -269,10 +381,358 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
           </button>
         </div>
 
-        {/* Content */}
+        {/* Content — reordered: required text fields first, then department/doctor, then vitals, then optional photo/police */}
         <div className="flex-1 overflow-y-auto p-6">
+          {/* Submit-level error banner */}
+          {submitError && (
+            <div className="mb-4 flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>{submitError}</span>
+            </div>
+          )}
+
           <div className="space-y-6">
-            {/* Patient Photo */}
+            {/* === REQUIRED PATIENT DETAILS (above the fold) === */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Patient Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^a-zA-Z\s\-'.]/g, '');
+                    setFormData({ ...formData, name: val });
+                    if (fieldErrors.name) setFieldErrors({ ...fieldErrors, name: '' });
+                  }}
+                  className={`w-full px-3 py-2 bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+                    fieldErrors.name ? 'border-red-500' : 'border-input'
+                  }`}
+                  placeholder="Enter full name"
+                />
+                <ErrorMsg msg={fieldErrors.name} />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Age <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="150"
+                  step="1"
+                  value={formData.age}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9]/g, '');
+                    setFormData({ ...formData, age: val });
+                    if (fieldErrors.age) setFieldErrors({ ...fieldErrors, age: '' });
+                  }}
+                  className={`w-full px-3 py-2 bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+                    fieldErrors.age ? 'border-red-500' : 'border-input'
+                  }`}
+                  placeholder="e.g., 45"
+                />
+                <ErrorMsg msg={fieldErrors.age} />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Gender <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.gender}
+                  onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="M">Male</option>
+                  <option value="F">Female</option>
+                  <option value="O">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Blood Group
+                </label>
+                <select
+                  value={formData.bloodGroup}
+                  onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Select</option>
+                  <option value="A+">A+</option>
+                  <option value="A-">A-</option>
+                  <option value="B+">B+</option>
+                  <option value="B-">B-</option>
+                  <option value="AB+">AB+</option>
+                  <option value="AB-">AB-</option>
+                  <option value="O+">O+</option>
+                  <option value="O-">O-</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Phone Number
+                </label>
+                <div className="flex">
+                  <span className="inline-flex items-center px-3 py-2 bg-muted border border-r-0 border-input rounded-l-lg text-sm text-muted-foreground font-medium">
+                    +91
+                  </span>
+                  <input
+                    type="tel"
+                    value={formData.phone.replace(/^\+91\s*/, '')}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setFormData({ ...formData, phone: `+91 ${digits}` });
+                      if (fieldErrors.phone) setFieldErrors({ ...fieldErrors, phone: '' });
+                    }}
+                    className={`w-full px-3 py-2 bg-background border rounded-r-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+                      fieldErrors.phone ? 'border-red-500' : 'border-input'
+                    }`}
+                    placeholder="98765 43210"
+                    maxLength={10}
+                  />
+                </div>
+                <ErrorMsg msg={fieldErrors.phone} />
+              </div>
+            </div>
+
+            {/* Chief Complaint — moved above the fold (required) */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Chief Complaint / Symptoms <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={formData.complaint}
+                onChange={(e) => {
+                  setFormData({ ...formData, complaint: e.target.value });
+                  if (fieldErrors.complaint) setFieldErrors({ ...fieldErrors, complaint: '' });
+                }}
+                rows={3}
+                className={`w-full px-3 py-2 bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none ${
+                  fieldErrors.complaint ? 'border-red-500' : 'border-input'
+                }`}
+                placeholder="Describe symptoms and reason for visit"
+              />
+              <ErrorMsg msg={fieldErrors.complaint} />
+            </div>
+
+            {/* Department and Doctor Assignment */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  <Building2 className="w-4 h-4 inline mr-1" />
+                  Department <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedDepartment}
+                  onChange={(e) => {
+                    setSelectedDepartment(e.target.value);
+                    setSelectedDoctor('');
+                    if (fieldErrors.department) setFieldErrors({ ...fieldErrors, department: '' });
+                  }}
+                  className={`w-full px-3 py-2 bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+                    fieldErrors.department ? 'border-red-500' : 'border-input'
+                  }`}
+                  disabled={departmentsLoading}
+                >
+                  <option value="">Select department...</option>
+                  {departments?.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
+                <ErrorMsg msg={fieldErrors.department} />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  <Stethoscope className="w-4 h-4 inline mr-1" />
+                  Assign Doctor
+                </label>
+                <select
+                  value={selectedDoctor}
+                  onChange={(e) => setSelectedDoctor(e.target.value)}
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  disabled={!selectedDepartment || doctorsLoading}
+                >
+                  <option value="">Auto-assign (recommended)</option>
+                  {doctors?.map((doctor) => (
+                    <option key={doctor.id} value={doctor.id}>
+                      {doctor.name}{doctor.specialization ? ` - ${doctor.specialization}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {/* Show contextual hint based on actual state — fixes residual hint bug */}
+                {!selectedDepartment ? (
+                  <p className="text-xs text-muted-foreground mt-1">Select a department first</p>
+                ) : doctorsLoading ? (
+                  <p className="text-xs text-muted-foreground mt-1">Loading doctors…</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">Leave empty to auto-assign based on workload</p>
+                )}
+              </div>
+            </div>
+
+            {/* Bed auto-assigned info */}
+            <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <Bed className="w-4 h-4 text-blue-600" />
+              <p className="text-sm text-blue-700">A bed will be automatically assigned from the selected department</p>
+            </div>
+
+            {/* === VITALS (with validation) === */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-medium text-foreground">
+                  Initial Vitals (Optional)
+                </label>
+                <div>
+                  <input
+                    type="file"
+                    ref={vitalsScanInputRef}
+                    accept="image/*"
+                    onChange={handleVitalsScanUpload}
+                    className="hidden"
+                    id="vitals-scan-upload"
+                  />
+                  <label
+                    htmlFor="vitals-scan-upload"
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors text-xs font-medium border border-blue-200 ${ocrLoading ? 'opacity-60 pointer-events-none' : ''}`}
+                  >
+                    {ocrLoading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Extracting...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        OCR Scan Vitals
+                      </>
+                    )}
+                  </label>
+                </div>
+              </div>
+
+              {vitalsScan && (
+                <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <img src={vitalsScan} alt="Vitals scan" className="w-20 h-20 object-cover rounded" />
+                    <div className="flex-1">
+                      <p className="text-xs font-medium text-blue-900 mb-1">Vitals extracted via OCR</p>
+                      <p className="text-xs text-blue-700">Values have been automatically filled below — please verify</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-5 gap-3">
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1">HR (bpm)</label>
+                  <input
+                    type="number"
+                    min="20"
+                    max="300"
+                    step="1"
+                    value={formData.vitals.hr}
+                    onChange={(e) => {
+                      setFormData({ ...formData, vitals: { ...formData.vitals, hr: e.target.value } });
+                      if (fieldErrors.vitalsHr) setFieldErrors({ ...fieldErrors, vitalsHr: '' });
+                    }}
+                    className={`w-full px-3 py-2 bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm ${
+                      fieldErrors.vitalsHr ? 'border-red-500' : 'border-input'
+                    }`}
+                    placeholder="72"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1">BP (mmHg)</label>
+                  <input
+                    type="text"
+                    value={formData.vitals.bp}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9/]/g, '');
+                      setFormData({ ...formData, vitals: { ...formData.vitals, bp: val } });
+                      if (fieldErrors.vitalsBp) setFieldErrors({ ...fieldErrors, vitalsBp: '' });
+                    }}
+                    className={`w-full px-3 py-2 bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm ${
+                      fieldErrors.vitalsBp ? 'border-red-500' : 'border-input'
+                    }`}
+                    placeholder="120/80"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1">SpO₂ (%)</label>
+                  <input
+                    type="number"
+                    min="50"
+                    max="100"
+                    step="1"
+                    value={formData.vitals.spo2}
+                    onChange={(e) => {
+                      setFormData({ ...formData, vitals: { ...formData.vitals, spo2: e.target.value } });
+                      if (fieldErrors.vitalsSpo2) setFieldErrors({ ...fieldErrors, vitalsSpo2: '' });
+                    }}
+                    className={`w-full px-3 py-2 bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm ${
+                      fieldErrors.vitalsSpo2 ? 'border-red-500' : 'border-input'
+                    }`}
+                    placeholder="98"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1">Temp (°C)</label>
+                  <input
+                    type="number"
+                    min="30"
+                    max="45"
+                    step="0.1"
+                    value={formData.vitals.temp}
+                    onChange={(e) => {
+                      setFormData({ ...formData, vitals: { ...formData.vitals, temp: e.target.value } });
+                      if (fieldErrors.vitalsTemp) setFieldErrors({ ...fieldErrors, vitalsTemp: '' });
+                    }}
+                    className={`w-full px-3 py-2 bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm ${
+                      fieldErrors.vitalsTemp ? 'border-red-500' : 'border-input'
+                    }`}
+                    placeholder="36.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1">RR (/min)</label>
+                  <input
+                    type="number"
+                    min="4"
+                    max="80"
+                    step="1"
+                    value={formData.vitals.rr}
+                    onChange={(e) => {
+                      setFormData({ ...formData, vitals: { ...formData.vitals, rr: e.target.value } });
+                      if (fieldErrors.vitalsRr) setFieldErrors({ ...fieldErrors, vitalsRr: '' });
+                    }}
+                    className={`w-full px-3 py-2 bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm ${
+                      fieldErrors.vitalsRr ? 'border-red-500' : 'border-input'
+                    }`}
+                    placeholder="16"
+                  />
+                </div>
+              </div>
+              {/* Inline error display for vitals — show first failing one */}
+              {(fieldErrors.vitalsHr || fieldErrors.vitalsBp || fieldErrors.vitalsSpo2 || fieldErrors.vitalsTemp || fieldErrors.vitalsRr) && (
+                <div className="mt-2 space-y-0.5">
+                  <ErrorMsg msg={fieldErrors.vitalsHr} />
+                  <ErrorMsg msg={fieldErrors.vitalsBp} />
+                  <ErrorMsg msg={fieldErrors.vitalsSpo2} />
+                  <ErrorMsg msg={fieldErrors.vitalsTemp} />
+                  <ErrorMsg msg={fieldErrors.vitalsRr} />
+                </div>
+              )}
+            </div>
+
+            {/* === OPTIONAL: Patient Photo === */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
                 Patient Photo (Optional)
@@ -358,178 +818,7 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
               </div>
             </div>
 
-            {/* Patient Details */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Patient Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/[^a-zA-Z\s\-'.]/g, '');
-                    setFormData({ ...formData, name: val });
-                  }}
-                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Enter full name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Age <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="150"
-                  step="1"
-                  value={formData.age}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/[^0-9]/g, '');
-                    setFormData({ ...formData, age: val });
-                  }}
-                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="e.g., 45"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Gender <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.gender}
-                  onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="M">Male</option>
-                  <option value="F">Female</option>
-                  <option value="O">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Blood Group
-                </label>
-                <select
-                  value={formData.bloodGroup}
-                  onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
-                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="">Select</option>
-                  <option value="A+">A+</option>
-                  <option value="A-">A-</option>
-                  <option value="B+">B+</option>
-                  <option value="B-">B-</option>
-                  <option value="AB+">AB+</option>
-                  <option value="AB-">AB-</option>
-                  <option value="O+">O+</option>
-                  <option value="O-">O-</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Phone Number
-                </label>
-                <div className="flex">
-                  <span className="inline-flex items-center px-3 py-2 bg-muted border border-r-0 border-input rounded-l-lg text-sm text-muted-foreground font-medium">
-                    +91
-                  </span>
-                  <input
-                    type="tel"
-                    value={formData.phone.replace(/^\+91\s*/, '')}
-                    onChange={(e) => {
-                      const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
-                      setFormData({ ...formData, phone: `+91 ${digits}` });
-                    }}
-                    className="w-full px-3 py-2 bg-background border border-input rounded-r-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="98765 43210"
-                    maxLength={10}
-                  />
-                </div>
-                {formData.phone.replace(/^\+91\s*/, '').replace(/\D/g, '').length > 0 &&
-                 formData.phone.replace(/^\+91\s*/, '').replace(/\D/g, '').length < 10 && (
-                  <p className="text-xs text-red-500 mt-1">Phone number must be 10 digits</p>
-                )}
-              </div>
-            </div>
-
-            {/* Chief Complaint */}
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Chief Complaint / Symptoms <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={formData.complaint}
-                onChange={(e) => setFormData({ ...formData, complaint: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                placeholder="Describe symptoms and reason for visit"
-              />
-            </div>
-
-            {/* Department and Doctor Assignment */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  <Building2 className="w-4 h-4 inline mr-1" />
-                  Department <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={selectedDepartment}
-                  onChange={(e) => {
-                    setSelectedDepartment(e.target.value);
-                    setSelectedDoctor(''); // Reset doctor when department changes
-                  }}
-                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  disabled={departmentsLoading}
-                >
-                  <option value="">Select department...</option>
-                  {departments?.map((dept) => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  <Stethoscope className="w-4 h-4 inline mr-1" />
-                  Assign Doctor
-                </label>
-                <select
-                  value={selectedDoctor}
-                  onChange={(e) => setSelectedDoctor(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  disabled={!selectedDepartment || doctorsLoading}
-                >
-                  <option value="">Auto-assign (recommended)</option>
-                  {doctors?.map((doctor) => (
-                    <option key={doctor.id} value={doctor.id}>
-                      {doctor.name}{doctor.specialization ? ` - ${doctor.specialization}` : ''}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {!selectedDepartment
-                    ? 'Select a department first'
-                    : 'Leave empty to auto-assign based on workload'}
-                </p>
-              </div>
-            </div>
-
-            {/* Bed auto-assigned info */}
-            <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <Bed className="w-4 h-4 text-blue-600" />
-              <p className="text-sm text-blue-700">A bed will be automatically assigned from the selected department</p>
-            </div>
-
-            {/* Police/Emergency Case */}
+            {/* === OPTIONAL: Police/Emergency Case === */}
             <div className={`p-4 rounded-lg border-2 transition-colors ${isPoliceCase ? 'border-red-300 bg-red-50' : 'border-border bg-muted/30'}`}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -544,7 +833,7 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                     setIsPoliceCase(!isPoliceCase);
                     if (isPoliceCase) {
                       setPoliceCaseType('');
-                                      setPoliceAlertPending(false);
+                      setPoliceAlertPending(false);
                       setPoliceAlertError('');
                     }
                   }}
@@ -572,8 +861,13 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                     </label>
                     <select
                       value={policeCaseType}
-                      onChange={(e) => setPoliceCaseType(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-red-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                      onChange={(e) => {
+                        setPoliceCaseType(e.target.value);
+                        if (fieldErrors.policeCaseType) setFieldErrors({ ...fieldErrors, policeCaseType: '' });
+                      }}
+                      className={`w-full px-3 py-2 bg-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm ${
+                        fieldErrors.policeCaseType ? 'border-red-500' : 'border-red-200'
+                      }`}
                     >
                       <option value="">Select case type...</option>
                       <option value="road_accident">Road Traffic Accident</option>
@@ -587,6 +881,7 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                       <option value="brought_dead">Brought Dead</option>
                       <option value="other">Other Police Matter</option>
                     </select>
+                    <ErrorMsg msg={fieldErrors.policeCaseType} />
                   </div>
 
                   {policeCaseType && !policeAlertPending && (
@@ -623,126 +918,6 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                 </div>
               )}
             </div>
-
-            {/* Vitals */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <label className="block text-sm font-medium text-foreground">
-                  Initial Vitals (Optional)
-                </label>
-                <div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleVitalsScanUpload}
-                    className="hidden"
-                    id="vitals-scan-upload"
-                  />
-                  <label
-                    htmlFor="vitals-scan-upload"
-                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors text-xs font-medium border border-blue-200"
-                  >
-                    <Camera className="w-3.5 h-3.5" />
-                    OCR Scan Vitals
-                  </label>
-                </div>
-              </div>
-
-              {vitalsScan && (
-                <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <img src={vitalsScan} alt="Vitals scan" className="w-20 h-20 object-cover rounded" />
-                    <div className="flex-1">
-                      <p className="text-xs font-medium text-blue-900 mb-1">Vitals extracted via OCR</p>
-                      <p className="text-xs text-blue-700">Values have been automatically filled below</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-5 gap-3">
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">HR (bpm)</label>
-                  <input
-                    type="number"
-                    min="20"
-                    max="300"
-                    step="1"
-                    value={formData.vitals.hr}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      vitals: { ...formData.vitals, hr: e.target.value }
-                    })}
-                    className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                    placeholder="72"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">BP (mmHg)</label>
-                  <input
-                    type="text"
-                    value={formData.vitals.bp}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9/]/g, '');
-                      setFormData({
-                        ...formData,
-                        vitals: { ...formData.vitals, bp: val }
-                      });
-                    }}
-                    className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                    placeholder="120/80"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">SpO₂ (%)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={formData.vitals.spo2}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      vitals: { ...formData.vitals, spo2: e.target.value }
-                    })}
-                    className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                    placeholder="98"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">Temp (°C)</label>
-                  <input
-                    type="number"
-                    min="30"
-                    max="45"
-                    step="0.1"
-                    value={formData.vitals.temp}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      vitals: { ...formData.vitals, temp: e.target.value }
-                    })}
-                    className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                    placeholder="36.5"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">RR (/min)</label>
-                  <input
-                    type="number"
-                    min="4"
-                    max="80"
-                    step="1"
-                    value={formData.vitals.rr}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      vitals: { ...formData.vitals, rr: e.target.value }
-                    })}
-                    className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                    placeholder="16"
-                  />
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -758,7 +933,7 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
           <Button
             onClick={handleSubmit}
             className="bg-primary text-primary-foreground hover:bg-primary/90"
-            disabled={createPatient.isPending || !formData.name || !formData.age || !formData.complaint || !selectedDepartment}
+            disabled={createPatient.isPending}
           >
             {createPatient.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {createPatient.isPending ? 'Registering...' : 'Run AI Triage'}

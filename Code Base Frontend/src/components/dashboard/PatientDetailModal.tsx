@@ -208,8 +208,8 @@ export function PatientDetailModal({ patient, open, onOpenChange }: PatientDetai
   const [showDischargeModal, setShowDischargeModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
-  // Expandable reasoning state
-  const [showTriageReasoning, setShowTriageReasoning] = useState(false);
+  // Expandable reasoning state — default expanded since AI reasoning is critical clinical info
+  const [showTriageReasoning, setShowTriageReasoning] = useState(true);
 
   // Push to OPD state
   const [showOPDPrompt, setShowOPDPrompt] = useState(false);

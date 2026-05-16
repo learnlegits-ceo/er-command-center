@@ -23,6 +23,7 @@ from app.core.dependencies import require_admin
 from app.core.security import get_password_hash
 from app.services.plan_limits import check_user_limit, check_bed_limit
 from app.services.usage_tracker import get_current_usage
+from app.services.audit import log_action
 
 router = APIRouter()
 
@@ -164,6 +165,14 @@ async def create_staff(
     settings = UserSettings(user_id=user.id)
     db.add(settings)
 
+    await log_action(
+        db, current_user,
+        action="create",
+        entity_type="user",
+        entity_id=user.id,
+        new_values={"name": user.name, "email": user.email, "role": user.role},
+    )
+
     await db.commit()
 
     # Re-fetch with department eagerly loaded
@@ -217,9 +226,19 @@ async def update_staff(
     # Update only explicitly allowed fields to prevent privilege escalation
     UPDATABLE_STAFF_FIELDS = {"name", "phone", "department_id", "specialization", "status", "avatar_url"}
     update_data = request.model_dump(exclude_unset=True)
+    applied = {}
     for field, value in update_data.items():
         if field in UPDATABLE_STAFF_FIELDS:
             setattr(user, field, value)
+            applied[field] = str(value) if value is not None else None
+
+    await log_action(
+        db, current_user,
+        action="update",
+        entity_type="user",
+        entity_id=user.id,
+        new_values=applied or None,
+    )
 
     await db.commit()
 
@@ -275,6 +294,14 @@ async def delete_staff(
     user.status = "inactive"
     user.deleted_at = datetime.utcnow()
 
+    await log_action(
+        db, current_user,
+        action="delete",
+        entity_type="user",
+        entity_id=user.id,
+        old_values={"name": user.name, "email": user.email, "role": user.role},
+    )
+
     await db.commit()
 
     return {"success": True, "message": "Staff member deactivated"}
@@ -306,6 +333,13 @@ async def reset_staff_password(
     import secrets
     temp_password = secrets.token_urlsafe(12)
     user.password_hash = get_password_hash(temp_password)
+
+    await log_action(
+        db, current_user,
+        action="reset_password",
+        entity_type="user",
+        entity_id=user.id,
+    )
 
     await db.commit()
 
@@ -806,19 +840,55 @@ async def split_emergency_department(
 
 VALID_BED_TYPES = ["icu", "general", "isolation", "pediatric", "maternity", "emergency", "daycare", "observation"]
 
+# Suggested default cost per day in INR — typical mid-tier Indian hospital benchmarks.
+# Admins can edit any of these; defaults exist only so the UI is never blank on first run.
+DEFAULT_BED_PRICING_INR = {
+    "icu":         15000,
+    "general":     2500,
+    "isolation":   5000,
+    "pediatric":   3500,
+    "maternity":   4500,
+    "emergency":   6000,
+    "daycare":     1500,
+    "observation": 2000,
+}
+
 
 @router.get("/bed-pricing", response_model=dict)
 async def get_bed_pricing(
     current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """List all bed type pricing for this hospital."""
+    """List all bed type pricing for this hospital.
+
+    On first call for a tenant, auto-seeds sensible Indian-hospital default prices
+    so the admin UI is never blank. Admins can edit any of these afterwards.
+    """
     result = await db.execute(
         select(BedTypePricing).where(
             BedTypePricing.tenant_id == current_user.tenant_id
         ).order_by(BedTypePricing.bed_type)
     )
     pricing = result.scalars().all()
+
+    # If the tenant has zero rows, seed defaults (idempotent: only triggers when empty)
+    if not pricing:
+        for bed_type, cost in DEFAULT_BED_PRICING_INR.items():
+            db.add(BedTypePricing(
+                tenant_id=current_user.tenant_id,
+                bed_type=bed_type,
+                cost_per_day=cost,
+                currency="INR",
+                is_active=True,
+            ))
+        await db.commit()
+        # Re-read after seeding
+        result = await db.execute(
+            select(BedTypePricing).where(
+                BedTypePricing.tenant_id == current_user.tenant_id
+            ).order_by(BedTypePricing.bed_type)
+        )
+        pricing = result.scalars().all()
 
     # Build a map of configured types
     configured = {p.bed_type: p for p in pricing}
@@ -839,10 +909,11 @@ async def get_bed_pricing(
             data.append({
                 "id": None,
                 "bed_type": bed_type,
-                "cost_per_day": 0,
+                "cost_per_day": DEFAULT_BED_PRICING_INR.get(bed_type, 0),
                 "currency": "INR",
                 "is_active": False,
                 "status": "not_set",
+                "suggested": True,
             })
 
     return {"success": True, "data": data}
@@ -1086,6 +1157,14 @@ async def soft_delete_patient(
             bed.status = "available"
             bed.current_patient_id = None
             bed.assigned_at = None
+
+    await log_action(
+        db, current_user,
+        action="delete",
+        entity_type="patient",
+        entity_id=patient.id,
+        old_values={"name": patient.name, "patient_id": patient.patient_id, "status": patient.status},
+    )
 
     await db.commit()
 

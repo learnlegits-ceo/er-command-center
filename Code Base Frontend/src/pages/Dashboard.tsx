@@ -44,7 +44,7 @@ export default function Dashboard() {
     department: departmentName
   })
   const { data: alerts, isLoading: alertsLoading, error: alertsError } = useActiveAlerts()
-  const { data: patientFlow } = usePatientFlow()
+  const { data: patientFlow, isLoading: patientFlowLoading } = usePatientFlow()
   const { data: bedsData } = useBeds()
 
 
@@ -289,6 +289,7 @@ export default function Dashboard() {
         triageTime={analyticsData.triageTime}
         bedUtilization={analyticsData.bedUtilization}
         dischargeAdmission={analyticsData.dischargeAdmission}
+        isLoading={patientFlowLoading}
       />
 
       {/* Patient Detail Modal */}

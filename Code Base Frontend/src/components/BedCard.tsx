@@ -12,9 +12,14 @@ export function BedCard({ bed, onClick }: BedCardProps) {
   // Support both new backend structure and legacy structure
   const bedNumber = bed.bedNumber || bed.number || 'N/A'
   const bedType = bed.bedType || bed.type || 'general'
-  const location = bed.ward || bed.location || 'N/A'
+  // Backend field is `wing` (A/B); UI used to look for `ward` and showed "N/A"
+  const wing = bed.wing || bed.ward || bed.location || 'N/A'
   const floor = bed.floor || 'N/A'
   const patientInfo = bed.patient || (bed.patientId ? { patientId: bed.patientId, name: '', id: '' } : null)
+  // department comes from backend as a plain string name
+  const departmentDisplay = typeof bed.department === 'string'
+    ? bed.department
+    : bed.department?.name
 
   return (
     <Card
@@ -49,17 +54,17 @@ export function BedCard({ bed, onClick }: BedCardProps) {
             <span className="font-medium uppercase">{bedType}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Ward:</span>
-            <span className="font-medium">{location}</span>
+            <span className="text-muted-foreground">Wing:</span>
+            <span className="font-medium">{wing}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Floor:</span>
             <span className="font-medium">{floor}</span>
           </div>
-          {bed.department && (
+          {departmentDisplay && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Department:</span>
-              <span className="font-medium">{bed.department.name}</span>
+              <span className="font-medium">{departmentDisplay}</span>
             </div>
           )}
           {patientInfo && (

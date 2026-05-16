@@ -1,6 +1,7 @@
 import { ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { DashboardHeader } from './dashboard/DashboardHeader'
+import { Sidebar, Breadcrumbs } from './Sidebar'
 
 interface LayoutProps {
   children: ReactNode
@@ -32,12 +33,15 @@ export function Layout({ children }: LayoutProps) {
   return (
     <div className="h-screen bg-background flex flex-col">
       <DashboardHeader departmentName={getDepartmentName()} />
-      {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        <div className="container mx-auto p-6">
-          {children}
-        </div>
-      </main>
+      <div className="flex-1 flex overflow-hidden">
+        <Sidebar />
+        <main className="flex-1 overflow-auto">
+          <div className="container mx-auto p-6">
+            <Breadcrumbs />
+            {children}
+          </div>
+        </main>
+      </div>
     </div>
   )
 }
