@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { User, Mail, Phone, Building2, Shield, Camera, Stethoscope, Syringe, Upload, Video, Pencil, Check, X, Loader2 } from 'lucide-react'
 import { useUser } from '@/contexts/UserContext'
 import { Button } from '@/components/ui/button'
 import { endpoints } from '@/lib/api'
 
 export default function Profile() {
+  const { t } = useTranslation()
   const { user, setUser } = useUser()
   const [showPhotoOptions, setShowPhotoOptions] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -119,8 +121,8 @@ export default function Profile() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">My Profile</h1>
-          <p className="text-sm text-muted-foreground">Manage your account information</p>
+          <h1 className="text-2xl font-semibold text-foreground">{t('page.profile.title', { defaultValue: 'My Profile' })}</h1>
+          <p className="text-sm text-muted-foreground">{t('page.profile.subtitle', { defaultValue: 'Manage your account information' })}</p>
         </div>
         {!isEditing ? (
           <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">

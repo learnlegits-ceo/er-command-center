@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BedCard } from '@/components/BedCard'
 import { Button } from '@/components/ui/button'
 import { useBeds, useUpdateBedStatus, useAssignBed, useReleaseBed } from '@/hooks/useBeds'
@@ -7,6 +8,7 @@ import { Filter, Loader2, AlertCircle, X, User, Bed as BedIcon, RefreshCw, UserM
 import { Bed } from '@/data/types'
 
 export default function Beds() {
+  const { t } = useTranslation()
   const [filterType, setFilterType] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [selectedBed, setSelectedBed] = useState<Bed | null>(null)
@@ -106,8 +108,8 @@ export default function Beds() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Bed Management</h1>
-        <p className="text-muted-foreground">Monitor and manage bed availability across the ER</p>
+        <h1 className="text-3xl font-bold">{t('page.beds.title', { defaultValue: 'Bed Management' })}</h1>
+        <p className="text-muted-foreground">{t('page.beds.subtitle', { defaultValue: 'Monitor and manage bed availability across the ER' })}</p>
       </div>
 
       {/* Stats Overview */}

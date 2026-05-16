@@ -105,6 +105,26 @@ const resources = {
       'common.male': 'Male',
       'common.female': 'Female',
       'common.other': 'Other',
+
+      // Page headers (visible on each page)
+      'page.dashboard.title': 'ER Command Center',
+      'page.patients.title': 'Patients',
+      'page.patients.subtitle': 'Manage and monitor all patients in the ER',
+      'page.beds.title': 'Bed Management',
+      'page.beds.subtitle': 'Monitor and manage bed availability across the ER',
+      'page.alerts.title': 'Alerts & Notifications',
+      'page.profile.title': 'My Profile',
+      'page.profile.subtitle': 'Manage your account information',
+      'page.settings.title': 'Settings',
+      'page.settings.subtitle': 'Manage your account preferences',
+      'page.admin.title': 'Admin Panel',
+      'page.admin.subtitle': 'Manage staff, users, and system settings',
+      'page.help.title': 'Help & Support',
+
+      // Sidebar quick action
+      'sidebar.newArrival': 'New Arrival',
+      'sidebar.collapse': 'Collapse sidebar',
+      'sidebar.expand': 'Expand sidebar',
     },
   },
   hi: {
@@ -210,6 +230,26 @@ const resources = {
       'common.male': 'पुरुष',
       'common.female': 'महिला',
       'common.other': 'अन्य',
+
+      // Page headers
+      'page.dashboard.title': 'ईआर कमांड सेंटर',
+      'page.patients.title': 'मरीज़',
+      'page.patients.subtitle': 'ईआर में सभी मरीज़ों का प्रबंधन और निगरानी',
+      'page.beds.title': 'बिस्तर प्रबंधन',
+      'page.beds.subtitle': 'ईआर में बिस्तर उपलब्धता की निगरानी और प्रबंधन',
+      'page.alerts.title': 'अलर्ट और सूचनाएं',
+      'page.profile.title': 'मेरी प्रोफ़ाइल',
+      'page.profile.subtitle': 'अपनी खाता जानकारी प्रबंधित करें',
+      'page.settings.title': 'सेटिंग्स',
+      'page.settings.subtitle': 'अपनी खाता प्राथमिकताएं प्रबंधित करें',
+      'page.admin.title': 'एडमिन पैनल',
+      'page.admin.subtitle': 'कर्मचारी, उपयोगकर्ता और सिस्टम सेटिंग्स प्रबंधित करें',
+      'page.help.title': 'सहायता और समर्थन',
+
+      // Sidebar
+      'sidebar.newArrival': 'नया मरीज़',
+      'sidebar.collapse': 'साइडबार छोटा करें',
+      'sidebar.expand': 'साइडबार बड़ा करें',
     },
   },
   te: {
@@ -315,6 +355,26 @@ const resources = {
       'common.male': 'పురుషుడు',
       'common.female': 'స్త్రీ',
       'common.other': 'ఇతరం',
+
+      // Page headers
+      'page.dashboard.title': 'ER కమాండ్ సెంటర్',
+      'page.patients.title': 'రోగులు',
+      'page.patients.subtitle': 'ER లోని అన్ని రోగుల నిర్వహణ మరియు పర్యవేక్షణ',
+      'page.beds.title': 'బెడ్ నిర్వహణ',
+      'page.beds.subtitle': 'ER లో బెడ్ లభ్యత పర్యవేక్షణ మరియు నిర్వహణ',
+      'page.alerts.title': 'అలర్ట్‌లు & నోటిఫికేషన్లు',
+      'page.profile.title': 'నా ప్రొఫైల్',
+      'page.profile.subtitle': 'మీ ఖాతా సమాచారాన్ని నిర్వహించండి',
+      'page.settings.title': 'సెట్టింగ్‌లు',
+      'page.settings.subtitle': 'మీ ఖాతా ప్రాధాన్యతలను నిర్వహించండి',
+      'page.admin.title': 'అడ్మిన్ ప్యానెల్',
+      'page.admin.subtitle': 'సిబ్బంది, వినియోగదారులు మరియు సిస్టమ్ సెట్టింగ్‌లను నిర్వహించండి',
+      'page.help.title': 'సహాయం & మద్దతు',
+
+      // Sidebar
+      'sidebar.newArrival': 'కొత్త రోగి',
+      'sidebar.collapse': 'సైడ్‌బార్ చిన్నది',
+      'sidebar.expand': 'సైడ్‌బార్ పెద్దది',
     },
   },
 };

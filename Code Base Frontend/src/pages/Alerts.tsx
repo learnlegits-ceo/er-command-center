@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Bell,
   AlertTriangle,
@@ -76,6 +77,7 @@ function getTimeAgo(isoDate: string): string {
 }
 
 export default function Alerts() {
+  const { t } = useTranslation()
   const { user } = useUser()
   const navigate = useNavigate()
   const { data: alerts, isLoading, error } = useAlerts()
@@ -221,7 +223,7 @@ export default function Alerts() {
               {getRoleIcon()}
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-foreground">Alerts & Notifications</h1>
+              <h1 className="text-2xl font-semibold text-foreground">{t('page.alerts.title', { defaultValue: 'Alerts & Notifications' })}</h1>
               <p className="text-sm text-muted-foreground">{getRoleAlertDescription()}</p>
             </div>
           </div>

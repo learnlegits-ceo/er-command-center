@@ -15,12 +15,15 @@ import {
   Building2,
 } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useUser } from '@/contexts/UserContext'
 import { useActiveAlerts } from '@/hooks/useAlerts'
 import { cn } from '@/lib/utils'
 
 type NavItem = {
-  label: string
+  // i18n key — resolved at render time so language changes re-translate
+  labelKey: string
+  fallback: string
   // Either a fixed path, OR a function that returns the current path (for the dashboard which is dept-aware)
   path: string
   icon: typeof LayoutDashboard
@@ -33,6 +36,7 @@ export function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user } = useUser()
+  const { t } = useTranslation()
   const { data: alertsData } = useActiveAlerts()
   const unreadCount = alertsData?.data?.unreadCount || 0
   const [collapsed, setCollapsed] = useState(() => {
@@ -52,31 +56,32 @@ export function Sidebar() {
 
   // Platform admin gets a different nav
   const platformNav: NavItem[] = [
-    { label: 'Dashboard', path: '/platform', icon: LayoutDashboard, matcher: (p) => p === '/platform' },
-    { label: 'Hospitals', path: '/platform/hospitals', icon: Building2 },
-    { label: 'Plans', path: '/platform/plans', icon: Activity },
-    { label: 'Billing', path: '/platform/billing', icon: Activity },
-    { label: 'Team', path: '/platform/team', icon: Users },
+    { labelKey: 'nav.dashboard', fallback: 'Dashboard', path: '/platform', icon: LayoutDashboard, matcher: (p) => p === '/platform' },
+    { labelKey: 'platform.hospitals', fallback: 'Hospitals', path: '/platform/hospitals', icon: Building2 },
+    { labelKey: 'platform.plans', fallback: 'Plans', path: '/platform/plans', icon: Activity },
+    { labelKey: 'platform.billing', fallback: 'Billing', path: '/platform/billing', icon: Activity },
+    { labelKey: 'platform.team', fallback: 'Team', path: '/platform/team', icon: Users },
   ]
 
   // Regular nav for clinical / admin users
   const mainNav: NavItem[] = [
     {
-      label: 'Dashboard',
+      labelKey: 'nav.dashboard',
+      fallback: 'Dashboard',
       path: '/emergency/unit-a',
       icon: LayoutDashboard,
       matcher: (p) => p.startsWith('/emergency') || p.startsWith('/opd') || p === '/dashboard',
     },
-    { label: 'Patients', path: '/patients', icon: Users },
-    { label: 'Beds', path: '/beds', icon: Bed },
-    { label: 'Alerts', path: '/alerts', icon: Bell, badgeCount: unreadCount },
-    { label: 'Admin', path: '/admin', icon: Shield, visibleFor: ['admin'] },
+    { labelKey: 'nav.patients', fallback: 'Patients', path: '/patients', icon: Users },
+    { labelKey: 'nav.beds', fallback: 'Beds', path: '/beds', icon: Bed },
+    { labelKey: 'nav.alerts', fallback: 'Alerts', path: '/alerts', icon: Bell, badgeCount: unreadCount },
+    { labelKey: 'nav.admin', fallback: 'Admin', path: '/admin', icon: Shield, visibleFor: ['admin'] },
   ]
 
   const accountNav: NavItem[] = [
-    { label: 'Profile', path: '/profile', icon: User },
-    { label: 'Settings', path: '/settings', icon: Settings },
-    { label: 'Help', path: '/help', icon: HelpCircle },
+    { labelKey: 'nav.profile', fallback: 'Profile', path: '/profile', icon: User },
+    { labelKey: 'nav.settings', fallback: 'Settings', path: '/settings', icon: Settings },
+    { labelKey: 'nav.help', fallback: 'Help', path: '/help', icon: HelpCircle },
   ]
 
   const navToRender = isPlatformAdmin ? platformNav : mainNav
@@ -91,11 +96,13 @@ export function Sidebar() {
     }
     const Icon = item.icon
     const active = isActive(item)
+    // Resolve label via i18n with the hard-coded English fallback
+    const label = t(item.labelKey, { defaultValue: item.fallback })
     return (
       <button
         key={item.path}
         onClick={() => navigate(item.path)}
-        title={collapsed ? item.label : undefined}
+        title={collapsed ? label : undefined}
         className={cn(
           'group w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
           active
@@ -104,7 +111,7 @@ export function Sidebar() {
         )}
       >
         <Icon className="w-4 h-4 flex-shrink-0" />
-        {!collapsed && <span className="flex-1 text-left truncate">{item.label}</span>}
+        {!collapsed && <span className="flex-1 text-left truncate">{label}</span>}
         {!collapsed && item.badgeCount && item.badgeCount > 0 ? (
           <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-500 text-white text-[10px] font-semibold">
             {item.badgeCount > 99 ? '99+' : item.badgeCount}
@@ -126,7 +133,7 @@ export function Sidebar() {
         <button
           onClick={toggleCollapsed}
           className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? t('sidebar.expand', { defaultValue: 'Expand sidebar' }) : t('sidebar.collapse', { defaultValue: 'Collapse sidebar' })}
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
@@ -152,7 +159,7 @@ export function Sidebar() {
             className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-primary text-primary-foreground text-xs font-medium rounded-lg hover:bg-primary/90 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            New Arrival
+            {t('sidebar.newArrival', { defaultValue: 'New Arrival' })}
           </button>
         </div>
       )}

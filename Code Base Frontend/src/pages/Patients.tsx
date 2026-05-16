@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { PatientCard } from '@/components/PatientCard'
 import { Button } from '@/components/ui/button'
 import { usePatients } from '@/hooks/usePatients'
@@ -42,6 +43,7 @@ function transformPatientForModal(patient: any) {
 }
 
 export default function Patients() {
+  const { t } = useTranslation()
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterPriority, setFilterPriority] = useState<number | 'all'>('all')
@@ -83,12 +85,12 @@ export default function Patients() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Patients</h1>
-          <p className="text-muted-foreground">Manage and monitor all patients in the ER</p>
+          <h1 className="text-3xl font-bold">{t('page.patients.title', { defaultValue: 'Patients' })}</h1>
+          <p className="text-muted-foreground">{t('page.patients.subtitle', { defaultValue: 'Manage and monitor all patients in the ER' })}</p>
         </div>
         <Button onClick={() => setNewArrivalOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          Add Patient
+          {t('sidebar.newArrival', { defaultValue: 'New Arrival' })}
         </Button>
       </div>
 

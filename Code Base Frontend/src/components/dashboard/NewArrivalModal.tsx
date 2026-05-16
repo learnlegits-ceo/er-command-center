@@ -179,6 +179,53 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
     }
   };
 
+  // Validate a single vital value on blur — shows error immediately when user leaves the field
+  const validateVitalOnBlur = (field: 'hr' | 'spo2' | 'temp' | 'rr' | 'bp', value: string) => {
+    const errorKey = `vitals${field.charAt(0).toUpperCase() + field.slice(1)}`;
+    if (!value) {
+      // Clear any existing error if field is now empty
+      if (fieldErrors[errorKey]) setFieldErrors({ ...fieldErrors, [errorKey]: '' });
+      return;
+    }
+    let msg = '';
+    if (field === 'hr') {
+      const v = parseInt(value);
+      if (isNaN(v) || v < VITAL_RANGES.hr.min || v > VITAL_RANGES.hr.max) {
+        msg = `Heart Rate must be ${VITAL_RANGES.hr.min}–${VITAL_RANGES.hr.max} bpm`;
+      }
+    } else if (field === 'spo2') {
+      const v = parseFloat(value);
+      if (isNaN(v) || v < VITAL_RANGES.spo2.min || v > VITAL_RANGES.spo2.max) {
+        msg = `SpO₂ must be ${VITAL_RANGES.spo2.min}–${VITAL_RANGES.spo2.max}%`;
+      }
+    } else if (field === 'temp') {
+      const v = parseFloat(value);
+      if (isNaN(v) || v < VITAL_RANGES.temp.min || v > VITAL_RANGES.temp.max) {
+        msg = `Temperature must be ${VITAL_RANGES.temp.min}–${VITAL_RANGES.temp.max}°C`;
+      }
+    } else if (field === 'rr') {
+      const v = parseInt(value);
+      if (isNaN(v) || v < VITAL_RANGES.rr.min || v > VITAL_RANGES.rr.max) {
+        msg = `Respiratory Rate must be ${VITAL_RANGES.rr.min}–${VITAL_RANGES.rr.max} /min`;
+      }
+    } else if (field === 'bp') {
+      const parts = value.split('/');
+      if (parts.length !== 2 || !parts[0] || !parts[1]) {
+        msg = 'BP must be systolic/diastolic (e.g., 120/80)';
+      } else {
+        const sys = parseInt(parts[0]);
+        const dia = parseInt(parts[1]);
+        if (isNaN(sys) || isNaN(dia)) msg = 'BP values must be numbers';
+        else if (sys < 40 || sys > 300) msg = 'Systolic BP must be 40–300 mmHg';
+        else if (dia < 20 || dia > 200) msg = 'Diastolic BP must be 20–200 mmHg';
+        else if (dia >= sys) msg = 'Diastolic BP must be less than systolic';
+      }
+    }
+    if (msg !== (fieldErrors[errorKey] || '')) {
+      setFieldErrors({ ...fieldErrors, [errorKey]: msg });
+    }
+  };
+
   // Validate all required fields and vitals ranges — returns true if valid
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
@@ -643,6 +690,7 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                       setFormData({ ...formData, vitals: { ...formData.vitals, hr: e.target.value } });
                       if (fieldErrors.vitalsHr) setFieldErrors({ ...fieldErrors, vitalsHr: '' });
                     }}
+                    onBlur={(e) => validateVitalOnBlur('hr', e.target.value)}
                     className={`w-full px-3 py-2 bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm ${
                       fieldErrors.vitalsHr ? 'border-red-500' : 'border-input'
                     }`}
@@ -659,6 +707,7 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                       setFormData({ ...formData, vitals: { ...formData.vitals, bp: val } });
                       if (fieldErrors.vitalsBp) setFieldErrors({ ...fieldErrors, vitalsBp: '' });
                     }}
+                    onBlur={(e) => validateVitalOnBlur('bp', e.target.value)}
                     className={`w-full px-3 py-2 bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm ${
                       fieldErrors.vitalsBp ? 'border-red-500' : 'border-input'
                     }`}
@@ -677,6 +726,7 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                       setFormData({ ...formData, vitals: { ...formData.vitals, spo2: e.target.value } });
                       if (fieldErrors.vitalsSpo2) setFieldErrors({ ...fieldErrors, vitalsSpo2: '' });
                     }}
+                    onBlur={(e) => validateVitalOnBlur('spo2', e.target.value)}
                     className={`w-full px-3 py-2 bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm ${
                       fieldErrors.vitalsSpo2 ? 'border-red-500' : 'border-input'
                     }`}
@@ -695,6 +745,7 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                       setFormData({ ...formData, vitals: { ...formData.vitals, temp: e.target.value } });
                       if (fieldErrors.vitalsTemp) setFieldErrors({ ...fieldErrors, vitalsTemp: '' });
                     }}
+                    onBlur={(e) => validateVitalOnBlur('temp', e.target.value)}
                     className={`w-full px-3 py-2 bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm ${
                       fieldErrors.vitalsTemp ? 'border-red-500' : 'border-input'
                     }`}
@@ -713,6 +764,7 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                       setFormData({ ...formData, vitals: { ...formData.vitals, rr: e.target.value } });
                       if (fieldErrors.vitalsRr) setFieldErrors({ ...fieldErrors, vitalsRr: '' });
                     }}
+                    onBlur={(e) => validateVitalOnBlur('rr', e.target.value)}
                     className={`w-full px-3 py-2 bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm ${
                       fieldErrors.vitalsRr ? 'border-red-500' : 'border-input'
                     }`}

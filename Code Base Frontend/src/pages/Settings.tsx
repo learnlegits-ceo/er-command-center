@@ -125,8 +125,8 @@ export default function Settings() {
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Settings</h1>
-        <p className="text-sm text-muted-foreground">Manage your account preferences</p>
+        <h1 className="text-2xl font-semibold text-foreground">{i18n.t('page.settings.title', { defaultValue: 'Settings' })}</h1>
+        <p className="text-sm text-muted-foreground">{i18n.t('page.settings.subtitle', { defaultValue: 'Manage your account preferences' })}</p>
       </div>
 
       {/* Appearance Settings */}

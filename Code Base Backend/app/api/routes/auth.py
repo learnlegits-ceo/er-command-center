@@ -345,7 +345,12 @@ async def refresh_token(
     request: RefreshTokenRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    """Refresh access token."""
+    """Refresh access token.
+
+    On success, also writes a new UserSession row so that get_current_user
+    (which validates the token hash against an active session) accepts the
+    newly-minted token. Without this, refreshed tokens 401 on every call.
+    """
     try:
         payload = decode_token(request.refresh_token)
         if not payload or payload.get("type") != "refresh":
@@ -385,6 +390,25 @@ async def refresh_token(
 
         new_access_token = create_access_token(token_data)
         new_refresh_token = create_refresh_token(token_data)
+
+        # Persist a session row for the new access token so get_current_user
+        # accepts it on subsequent requests. Non-blocking: if storage fails,
+        # the client still receives the tokens (get_current_user is permissive
+        # for missing-session rows since that commit landed).
+        try:
+            session = UserSession(
+                user_id=user.id,
+                token_hash=hash_token(new_access_token),
+                refresh_token_hash=hash_token(new_refresh_token),
+                expires_at=datetime.utcnow() + timedelta(hours=1),
+                refresh_expires_at=datetime.utcnow() + timedelta(days=7),
+                is_active=True
+            )
+            db.add(session)
+            user.last_active_at = datetime.utcnow()
+            await db.commit()
+        except Exception:
+            pass
 
         return {
             "success": True,

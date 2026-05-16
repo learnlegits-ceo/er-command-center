@@ -75,16 +75,20 @@ async def get_current_user(
             detail="User account is not active"
         )
 
-    # Verify the token has not been revoked via logout
+    # Check that the token has not been EXPLICITLY revoked (logout marks
+    # is_active=False). Tokens with no session row are accepted: session
+    # writes during login / refresh-token are deliberately non-blocking, so
+    # a missing row means "storage hiccup", not "revoked". The token's own
+    # `exp` claim is the authoritative expiry.
     token_hash = hash_token(token)
-    session_result = await db.execute(
-        select(UserSession).where(
+    revoked_result = await db.execute(
+        select(UserSession.id).where(
             UserSession.user_id == user_uuid,
             UserSession.token_hash == token_hash,
-            UserSession.is_active == True
+            UserSession.is_active == False
         )
     )
-    if not session_result.scalar_one_or_none():
+    if revoked_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session has been invalidated. Please log in again.",

@@ -7,7 +7,10 @@ commit then persists the audit row along with the business change.
 """
 from __future__ import annotations
 
+import json
 import logging
+import sys
+import traceback
 from typing import Optional, Any
 from uuid import UUID
 
@@ -30,6 +33,23 @@ def _coerce_uuid(value: Any) -> Optional[UUID]:
         return None
 
 
+def _jsonable(value: Any) -> Any:
+    """Coerce a dict's UUID/datetime values to JSON-safe primitives.
+
+    JSONB columns accept Python primitives + dicts/lists. UUIDs and datetimes
+    raise TypeError on commit, which the broad except below would swallow,
+    silently dropping audit entries — exactly the symptom QA reported. This
+    helper makes the row safe to insert.
+    """
+    if value is None:
+        return None
+    try:
+        # Fast path: round-trip through json.dumps with default=str
+        return json.loads(json.dumps(value, default=str))
+    except (TypeError, ValueError):
+        return None
+
+
 async def log_action(
     db: AsyncSession,
     user: Optional[User],
@@ -49,6 +69,8 @@ async def log_action(
         - The action string is free-form (e.g. "create", "update", "delete",
           "assign_bed"). Keep it short and verb-leading so the admin filter is
           useful.
+        - On failure, prints a traceback to stderr so CloudWatch captures the
+          underlying error (logger.warning alone is easy to miss).
     """
     try:
         if not action or not entity_type:
@@ -59,11 +81,14 @@ async def log_action(
             action=action[:100],
             entity_type=entity_type[:50],
             entity_id=_coerce_uuid(entity_id),
-            old_values=old_values,
-            new_values=new_values,
+            old_values=_jsonable(old_values),
+            new_values=_jsonable(new_values),
             ip_address=ip_address,
             user_agent=user_agent,
         ))
     except Exception as exc:
-        # Audit failures must not break the user request
+        # Audit failures must not break the user request, but we want to see
+        # them — Lambda forwards stderr to CloudWatch.
+        print(f"[audit] log_action failed: {exc}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         logger.warning("audit log_action failed: %s", exc)

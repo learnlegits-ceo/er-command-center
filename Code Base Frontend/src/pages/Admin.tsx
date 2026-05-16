@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { UserPlus, Users, Shield, Stethoscope, Syringe, Edit2, Trash2, Search, Eye, EyeOff, X, Camera, User as UserIcon, Loader2, AlertTriangle, Phone, CheckCircle2, Clock, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useUser, UserRole } from '@/contexts/UserContext'
@@ -400,6 +401,7 @@ function DataCleanupSection({ onCleanup }: { onCleanup?: () => void }) {
 // ─── Main Admin Component ──────────────────────────────────────────────────
 
 export default function Admin() {
+  const { t } = useTranslation()
   const { user, canManageUsers } = useUser()
   const [activeAdminTab, setActiveAdminTab] = useState<'staff' | 'police' | 'audit' | 'bed-pricing' | 'usage-billing'>('staff')
 
@@ -731,8 +733,8 @@ export default function Admin() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Admin Panel</h1>
-          <p className="text-sm text-muted-foreground">Manage staff, users, and system settings</p>
+          <h1 className="text-2xl font-semibold text-foreground">{t('page.admin.title', { defaultValue: 'Admin Panel' })}</h1>
+          <p className="text-sm text-muted-foreground">{t('page.admin.subtitle', { defaultValue: 'Manage staff, users, and system settings' })}</p>
         </div>
         <Button onClick={() => { setShowAddModal(true); setError('') }}>
           <UserPlus className="w-4 h-4 mr-2" />

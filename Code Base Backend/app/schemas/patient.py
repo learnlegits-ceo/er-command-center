@@ -10,12 +10,92 @@ VALID_GENDERS = ("M", "F", "O", "male", "female", "other")
 
 
 class VitalsInput(BaseModel):
-    """Vitals input for patient registration."""
+    """Vitals input for patient registration.
+
+    Defense-in-depth: even when the frontend validation is bypassed
+    (stale bundle, direct API call), clinically impossible values must
+    not enter the system. AI triage trusts these numbers.
+    """
     hr: Optional[str] = None
     bp: Optional[str] = None
     spo2: Optional[str] = None
     temp: Optional[str] = None
     respiratory_rate: Optional[str] = None
+    # Frontend uses "rr" — accept both spellings
+    rr: Optional[str] = None
+
+    @field_validator("hr")
+    @classmethod
+    def validate_hr(cls, v: Optional[str]) -> Optional[str]:
+        if v in (None, ""):
+            return v
+        try:
+            n = int(float(v))
+        except (TypeError, ValueError):
+            raise ValueError("Heart rate must be a number")
+        if n < 20 or n > 300:
+            raise ValueError("Heart rate must be between 20 and 300 bpm")
+        return str(n)
+
+    @field_validator("spo2")
+    @classmethod
+    def validate_spo2(cls, v: Optional[str]) -> Optional[str]:
+        if v in (None, ""):
+            return v
+        try:
+            n = float(v)
+        except (TypeError, ValueError):
+            raise ValueError("SpO2 must be a number")
+        if n < 50 or n > 100:
+            raise ValueError("SpO2 must be between 50% and 100%")
+        return str(n)
+
+    @field_validator("temp")
+    @classmethod
+    def validate_temp(cls, v: Optional[str]) -> Optional[str]:
+        if v in (None, ""):
+            return v
+        try:
+            n = float(v)
+        except (TypeError, ValueError):
+            raise ValueError("Temperature must be a number")
+        if n < 30 or n > 45:
+            raise ValueError("Temperature must be between 30°C and 45°C")
+        return str(n)
+
+    @field_validator("respiratory_rate", "rr")
+    @classmethod
+    def validate_rr(cls, v: Optional[str]) -> Optional[str]:
+        if v in (None, ""):
+            return v
+        try:
+            n = int(float(v))
+        except (TypeError, ValueError):
+            raise ValueError("Respiratory rate must be a number")
+        if n < 4 or n > 80:
+            raise ValueError("Respiratory rate must be between 4 and 80 /min")
+        return str(n)
+
+    @field_validator("bp")
+    @classmethod
+    def validate_bp(cls, v: Optional[str]) -> Optional[str]:
+        if v in (None, ""):
+            return v
+        parts = str(v).split("/")
+        if len(parts) != 2 or not parts[0].strip() or not parts[1].strip():
+            raise ValueError("Blood pressure must be in the form systolic/diastolic, e.g. 120/80")
+        try:
+            sys_v = int(parts[0])
+            dia_v = int(parts[1])
+        except (TypeError, ValueError):
+            raise ValueError("Blood pressure values must be numbers")
+        if sys_v < 40 or sys_v > 300:
+            raise ValueError("Systolic blood pressure must be between 40 and 300 mmHg")
+        if dia_v < 20 or dia_v > 200:
+            raise ValueError("Diastolic blood pressure must be between 20 and 200 mmHg")
+        if dia_v >= sys_v:
+            raise ValueError("Diastolic blood pressure must be less than systolic")
+        return f"{sys_v}/{dia_v}"
 
 
 class PatientCreate(BaseModel):
