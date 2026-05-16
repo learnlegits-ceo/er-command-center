@@ -14,8 +14,8 @@ A full-stack healthcare platform that helps hospital ER staff manage patients, b
 | Backend    | FastAPI (Python 3.11), SQLAlchemy 2 async, Alembic, PostgreSQL |
 | AI         | Groq (Llama 3.3 70B) for AI triage            |
 | Auth       | JWT (python-jose) + bcrypt via passlib         |
-| Jobs       | Trigger.dev (TypeScript background jobs)       |
-| Deployment | Render.com (backend = Docker, frontend = static site) |
+| Jobs       | AWS Lambda + SQS (`er-cmd-jobs-queue` → `er-cmd-jobs-processor`) |
+| Deployment | AWS — Lambda (backend container image), S3 + CloudFront (frontend), RDS PostgreSQL, ap-south-1 |
 
 ---
 
@@ -28,7 +28,9 @@ A full-stack healthcare platform that helps hospital ER staff manage patients, b
 ├── .env.example                       # ★ Single env template — copy to .env
 ├── .env                               # ⚠️ Your local secrets — never commit
 ├── .gitignore
-├── render.yaml                        # Render.com deployment blueprint
+├── aws-deploy.sh                      # AWS deployment script (build → ECR → Lambda + S3 → CloudFront)
+├── aws-teardown.sh                    # ⚠️ Nuke all AWS resources for this project
+├── aws-deploy-state.env               # Tracked AWS resource IDs (gitignored)
 ├── docker-compose.yml                 # ★ Single compose file (dev full-stack)
 ├── setup.sh                           # First-time setup (Linux / Mac / Windows Git Bash)
 ├── verify.sh                          # Health-check all running services
@@ -83,12 +85,12 @@ A full-stack healthcare platform that helps hospital ER staff manage patients, b
 │   │   └── package.json
 │   ├── seed_data.py                   # Python seeder (preferred over SQL)
 │   ├── setup_all.py                   # First-time DB setup (create + seed)
-│   ├── Dockerfile                     # Production image
+│   ├── Dockerfile                     # Production image (includes AWS Lambda Web Adapter)
 │   ├── Makefile                       # Docker helper targets
 │   ├── alembic.ini
 │   ├── requirements.txt
-│   ├── runtime.txt                    # python-3.11 (for Render)
-│   └── start.sh                       # Docker CMD: migrate → uvicorn
+│   ├── lambda/jobs_processor.py       # SQS consumer Lambda (separate function)
+│   └── start.sh                       # Docker CMD: migrate (if RUN_MIGRATIONS=true) → uvicorn
 │
 └── Code Base Frontend/                # React + Vite frontend
     ├── src/
@@ -289,10 +291,10 @@ Every entity (`Patient`, `User`, `Bed`, etc.) has a `tenant_id` FK on the `tenan
 3. Axios interceptor injects `Authorization: Bearer <token>`
 4. 401 → auto-redirect to `/login` (except auth routes)
 
-### Background Jobs (Trigger.dev)
-- Python client: `app/services/jobs.py` (`TriggerDevService`)
-- Job definitions: `trigger/jobs.ts` (TypeScript)
-- Graceful fallback: if `TRIGGER_API_KEY` is blank, jobs log in mock mode — **app works without it**
+### Background Jobs
+- Backend selected by `JOBS_BACKEND` env var: `sqs` (production), `trigger` (legacy), or `mock` (default — logs to stdout, app runs without it).
+- **SQS** path (production): `app/services/sqs_jobs.py` enqueues to `er-cmd-jobs-queue`. The Lambda function `er-cmd-jobs-processor` (source: [`Code Base Backend/lambda/jobs_processor.py`](Code Base Backend/lambda/jobs_processor.py)) consumes messages and dispatches by `job_type` (email via Resend, alerts, cleanup, etc.).
+- **Mock** path: `app/services/jobs.py` `TriggerDevService` logs messages — used in local dev when AWS credentials aren't set.
 
 ### DB Connection Notes
 - `statement_cache_size=0` required for Supabase transaction pooler (port 6543)
@@ -300,13 +302,31 @@ Every entity (`Patient`, `User`, `Bed`, etc.) has a `tenant_id` FK on the `tenan
 
 ---
 
-## Deployment (Render.com)
+## Deployment (AWS)
 
-Configured in [`render.yaml`](render.yaml):
-1. Push to `main` → Render auto-deploys
-2. **Backend** → Docker image, runs `alembic upgrade head` then `uvicorn`
-3. **Frontend** → Static site, `npm run build`, serves `dist/`
-4. Set secret env vars in the **Render Dashboard** (not in `render.yaml`)
+**Region:** `ap-south-1` &nbsp;&nbsp; **Account:** `721995408359` &nbsp;&nbsp; **Prefix:** `er-cmd`
+
+| Tier      | AWS Resource                                                                 |
+|-----------|------------------------------------------------------------------------------|
+| Frontend  | S3 bucket `er-cmd-frontend-721995408359` served by CloudFront `E1UU36HEM7C408` (`d2u6nlqdsggd1x.cloudfront.net`) |
+| Backend   | Lambda `er-cmd-backend` (container image from ECR `er-backend:lambda`) fronted by API Gateway `o1567kly2d` |
+| Routing   | CloudFront proxies `/api/*`, `/docs*`, `/openapi.json` → API Gateway; everything else → S3 |
+| DB        | RDS PostgreSQL `er-cmd-db` (in private subnets `subnet-0a3b32b25cff8af46`, `subnet-0db3f22f041ce53d8`) |
+| Jobs      | SQS `er-cmd-jobs-queue` → Lambda `er-cmd-jobs-processor` (source: [`Code Base Backend/lambda/jobs_processor.py`](Code Base Backend/lambda/jobs_processor.py)) |
+| Uploads   | S3 `er-cmd-uploads-721995408359` |
+| Secrets   | SSM Parameter Store under `/er-cmd/*` |
+
+**Deploying changes:**
+
+```bash
+./aws-deploy.sh                  # build + push backend image, update Lambda, build frontend, sync S3, invalidate CloudFront
+./aws-deploy.sh backend          # backend only
+./aws-deploy.sh frontend         # frontend only
+```
+
+The script reads tracked resource IDs from [`aws-deploy-state.env`](aws-deploy-state.env) (gitignored — keep secrets out of the repo). To wipe the environment, run [`./aws-teardown.sh`](aws-teardown.sh).
+
+Since the frontend and backend are served from the same CloudFront origin, `VITE_API_BASE_URL` is the relative path `/api/v1` (no CORS preflight needed).
 
 ---
 
