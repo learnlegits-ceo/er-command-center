@@ -38,10 +38,13 @@ export default function Dashboard() {
 
   // Fetch real data from backend APIs
   const { data: stats, isLoading: statsLoading, error: statsError } = useDashboardStats()
-  // Filter patients by selected department
+  // Fetch ALL active patients across the tenant for the triage queue.
+  // The unit URL is a navigation context, not a hard filter — a newly registered
+  // patient should always appear in the queue regardless of which unit dashboard
+  // the user happens to be viewing, otherwise patients silently vanish when their
+  // department doesn't exactly match the current URL slug.
   const { data: patients, isLoading: patientsLoading, error: patientsError } = usePatients({
-    status: 'all',
-    department: departmentName
+    status: 'all'
   })
   const { data: alerts, isLoading: alertsLoading, error: alertsError } = useActiveAlerts()
   const { data: patientFlow, isLoading: patientFlowLoading } = usePatientFlow()
