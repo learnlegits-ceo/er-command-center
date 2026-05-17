@@ -626,6 +626,13 @@ async def create_patient(
         assigned_bed.assigned_at = datetime.utcnow()
         patient.bed_id = assigned_bed.id
 
+        # If overflow landed the patient in a different department than the
+        # requested one, move the patient's home dept to match the bed so they
+        # show up on the receiving dept's dashboard (not stranded on a dept
+        # they're not physically in).
+        if assigned_bed.department_id and patient.department_id != assigned_bed.department_id:
+            patient.department_id = assigned_bed.department_id
+
         # Create bed assignment record
         bed_assignment = BedAssignment(
             bed_id=assigned_bed.id,

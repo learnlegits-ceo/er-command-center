@@ -227,6 +227,14 @@ async def assign_bed(
 
     patient.bed_id = bed.id
 
+    # If the bed is in a different department than the patient's current dept,
+    # the patient physically moves there — update their department so they
+    # appear on the receiving dept's dashboard, and audit the transfer.
+    transferred_from_dept_id = None
+    if bed.department_id and patient.department_id != bed.department_id:
+        transferred_from_dept_id = patient.department_id
+        patient.department_id = bed.department_id
+
     # Create assignment record
     assignment = BedAssignment(
         bed_id=bed.id,
@@ -244,6 +252,8 @@ async def assign_bed(
             "bed_number": bed.bed_number,
             "patient_id": str(patient.id),
             "patient_name": patient.name,
+            "transferred_from_dept_id": str(transferred_from_dept_id) if transferred_from_dept_id else None,
+            "new_dept_id": str(bed.department_id) if bed.department_id else None,
         },
     )
 
@@ -255,7 +265,8 @@ async def assign_bed(
             "bedId": str(bed.id),
             "bedNumber": bed.bed_number,
             "patientId": str(patient.id),
-            "assignedAt": bed.assigned_at
+            "assignedAt": bed.assigned_at,
+            "departmentChanged": transferred_from_dept_id is not None,
         }
     }
 
