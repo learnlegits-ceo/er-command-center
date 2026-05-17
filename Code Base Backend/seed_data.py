@@ -172,9 +172,11 @@ async def seed_data():
         session.add(tenant)
         print("[OK] Tenant created (linked to Enterprise plan)")
 
-        # Create Departments
+        # Create Departments. Names + codes MUST match admin.py
+        # initialize_departments() and the frontend departmentNameToPath map.
         departments_data = [
-            {"name": "Emergency Department", "code": "ED", "floor": "Ground Floor", "capacity": 30},
+            {"name": "Emergency Department - Unit A", "code": "ED-A", "floor": "Ground Floor", "capacity": 15},
+            {"name": "Emergency Department - Unit B", "code": "ED-B", "floor": "Ground Floor", "capacity": 15},
             {"name": "Emergency Care Unit", "code": "ECU", "floor": "Ground Floor", "capacity": 15},
             {"name": "Trauma Center", "code": "TC", "floor": "Ground Floor", "capacity": 20},
             {"name": "Outpatient Department", "code": "OPD", "floor": "1st Floor", "capacity": 50},
@@ -211,17 +213,19 @@ async def seed_data():
 
         # Demo users first (matching Login page credentials)
         demo_users = [
-            {"name": "Priya Sharma", "email": "priya@hospital.com", "role": "nurse", "dept": "ED", "password_hash": nurse_hash},
-            {"name": "Dr. Ananya Patel", "email": "ananya@hospital.com", "role": "doctor", "dept": "ED", "specialization": "Emergency Medicine", "password_hash": doctor_hash},
-            {"name": "Rajesh Kumar", "email": "rajesh@hospital.com", "role": "admin", "dept": "ED", "password_hash": admin_hash},
+            {"name": "Priya Sharma", "email": "priya@hospital.com", "role": "nurse", "dept": "ED-A", "password_hash": nurse_hash},
+            {"name": "Dr. Ananya Patel", "email": "ananya@hospital.com", "role": "doctor", "dept": "ED-A", "specialization": "Emergency Medicine", "password_hash": doctor_hash},
+            {"name": "Rajesh Kumar", "email": "rajesh@hospital.com", "role": "admin", "dept": "ED-A", "password_hash": admin_hash},
         ]
 
         users_data = [
-            # Emergency Department Staff
-            {"name": "Dr. Sarah Johnson", "email": "sarah.johnson@hospital.com", "role": "doctor", "dept": "ED", "specialization": "Emergency Medicine"},
-            {"name": "Dr. Michael Chen", "email": "michael.chen@hospital.com", "role": "doctor", "dept": "ED", "specialization": "Trauma Surgery"},
-            {"name": "Nurse Emily Davis", "email": "emily.davis@hospital.com", "role": "nurse", "dept": "ED"},
-            {"name": "Nurse James Wilson", "email": "james.wilson@hospital.com", "role": "nurse", "dept": "ED"},
+            # Emergency Department Unit A Staff
+            {"name": "Dr. Sarah Johnson", "email": "sarah.johnson@hospital.com", "role": "doctor", "dept": "ED-A", "specialization": "Emergency Medicine"},
+            {"name": "Nurse Emily Davis", "email": "emily.davis@hospital.com", "role": "nurse", "dept": "ED-A"},
+
+            # Emergency Department Unit B Staff
+            {"name": "Dr. Michael Chen", "email": "michael.chen@hospital.com", "role": "doctor", "dept": "ED-B", "specialization": "Trauma Surgery"},
+            {"name": "Nurse James Wilson", "email": "james.wilson@hospital.com", "role": "nurse", "dept": "ED-B"},
 
             # OPD Staff
             {"name": "Dr. Amanda Roberts", "email": "amanda.roberts@hospital.com", "role": "doctor", "dept": "OPD", "specialization": "General Medicine"},
@@ -302,13 +306,14 @@ async def seed_data():
 
         # Create Beds for each department
         bed_configs = {
-            "ED": {"prefix": "ED", "count": 15, "types": ["emergency", "trauma", "observation"]},
-            "ECU": {"prefix": "ECU", "count": 8, "types": ["emergency", "observation", "monitoring"]},
-            "TC": {"prefix": "TC", "count": 10, "types": ["trauma", "emergency", "observation"]},
-            "OPD": {"prefix": "OPD", "count": 20, "types": ["consultation", "examination", "procedure"]},
-            "ICU": {"prefix": "ICU", "count": 12, "types": ["icu", "isolation", "cardiac"]},
-            "GW": {"prefix": "GW", "count": 30, "types": ["general", "semi-private", "private"]},
-            "PED": {"prefix": "PED", "count": 15, "types": ["pediatric", "nicu", "general"]},
+            "ED-A": {"prefix": "ED-A", "count": 10, "types": ["emergency", "trauma", "observation"]},
+            "ED-B": {"prefix": "ED-B", "count": 10, "types": ["emergency", "trauma", "observation"]},
+            "ECU":  {"prefix": "ECU",  "count": 8,  "types": ["emergency", "observation", "monitoring"]},
+            "TC":   {"prefix": "TC",   "count": 10, "types": ["trauma", "emergency", "observation"]},
+            "OPD":  {"prefix": "OPD",  "count": 20, "types": ["consultation", "examination", "procedure"]},
+            "ICU":  {"prefix": "ICU",  "count": 12, "types": ["icu", "isolation", "cardiac"]},
+            "GW":   {"prefix": "GW",   "count": 30, "types": ["general", "semi-private", "private"]},
+            "PED":  {"prefix": "PED",  "count": 15, "types": ["pediatric", "nicu", "general"]},
             "CARD": {"prefix": "CARD", "count": 12, "types": ["cardiac", "ccu", "monitoring"]},
         }
 
@@ -334,14 +339,24 @@ async def seed_data():
 
         # Create Patients with DIFFERENT data for each department
 
-        # Emergency Department Patients - Acute cases
-        ed_patients = [
+        # Emergency Department Unit A Patients - Acute cases
+        ed_a_patients = [
             {"name": "John Smith", "age": 45, "gender": "M", "complaint": "Severe chest pain radiating to left arm", "priority": 1, "priority_label": "Critical", "priority_color": "red", "status": "in_treatment", "blood_group": "A+"},
             {"name": "Maria Garcia", "age": 32, "gender": "F", "complaint": "High fever with severe headache and stiff neck", "priority": 2, "priority_label": "Urgent", "priority_color": "orange", "status": "in_treatment", "blood_group": "O+"},
             {"name": "Robert Johnson", "age": 58, "gender": "M", "complaint": "Difficulty breathing, history of COPD", "priority": 1, "priority_label": "Critical", "priority_color": "red", "status": "in_treatment", "blood_group": "B+"},
+            {"name": "Aisha Khan", "age": 36, "gender": "F", "complaint": "Acute migraine with photophobia and nausea", "priority": 3, "priority_label": "Urgent", "priority_color": "yellow", "status": "in_treatment", "blood_group": "O+"},
+            {"name": "Marcus Reed", "age": 52, "gender": "M", "complaint": "Crushing chest pressure, diaphoretic", "priority": 1, "priority_label": "Critical", "priority_color": "red", "status": "in_treatment", "blood_group": "AB+"},
+            {"name": "Hannah Cole", "age": 24, "gender": "F", "complaint": "Suspected sepsis post-procedure", "priority": 2, "priority_label": "Urgent", "priority_color": "orange", "status": "waiting", "blood_group": "A-"},
+        ]
+
+        # Emergency Department Unit B Patients - Acute cases
+        ed_b_patients = [
             {"name": "Emily Brown", "age": 28, "gender": "F", "complaint": "Severe abdominal pain, vomiting blood", "priority": 2, "priority_label": "Urgent", "priority_color": "orange", "status": "waiting", "blood_group": "AB+"},
             {"name": "David Wilson", "age": 67, "gender": "M", "complaint": "Sudden weakness on right side, slurred speech", "priority": 1, "priority_label": "Critical", "priority_color": "red", "status": "in_treatment", "blood_group": "O-"},
             {"name": "Sarah Davis", "age": 41, "gender": "F", "complaint": "Allergic reaction with swelling and difficulty breathing", "priority": 2, "priority_label": "Urgent", "priority_color": "orange", "status": "waiting", "blood_group": "A-"},
+            {"name": "Omar Hussein", "age": 49, "gender": "M", "complaint": "Severe dehydration with persistent vomiting", "priority": 3, "priority_label": "Urgent", "priority_color": "yellow", "status": "in_treatment", "blood_group": "B+"},
+            {"name": "Grace Park", "age": 37, "gender": "F", "complaint": "Acute pyelonephritis, high fever", "priority": 2, "priority_label": "Urgent", "priority_color": "orange", "status": "in_treatment", "blood_group": "O+"},
+            {"name": "Felix Ortiz", "age": 63, "gender": "M", "complaint": "Atrial fibrillation with rapid ventricular response", "priority": 2, "priority_label": "Urgent", "priority_color": "orange", "status": "waiting", "blood_group": "AB-"},
         ]
 
         # OPD Patients - Routine and follow-up cases
@@ -390,6 +405,7 @@ async def seed_data():
             {"name": "Karthik Reddy", "age": 48, "gender": "M", "complaint": "Chest discomfort with palpitations", "priority": 2, "priority_label": "Urgent", "priority_color": "orange", "status": "in_treatment", "blood_group": "B+"},
             {"name": "Anita Verma", "age": 62, "gender": "F", "complaint": "Acute gastritis with severe vomiting", "priority": 3, "priority_label": "Standard", "priority_color": "yellow", "status": "waiting", "blood_group": "O+"},
             {"name": "Mohan Das", "age": 71, "gender": "M", "complaint": "Hypoglycemic episode, diabetic patient", "priority": 2, "priority_label": "Urgent", "priority_color": "orange", "status": "in_treatment", "blood_group": "AB+"},
+            {"name": "Ritu Bansal", "age": 27, "gender": "F", "complaint": "Asthma exacerbation, peak flow reduced", "priority": 2, "priority_label": "Urgent", "priority_color": "orange", "status": "in_treatment", "blood_group": "A-"},
         ]
 
         # Trauma Center Patients - Injuries and accidents
@@ -398,6 +414,8 @@ async def seed_data():
             {"name": "Priya Nair", "age": 31, "gender": "F", "complaint": "Motor vehicle accident, open fracture right leg", "priority": 2, "priority_label": "Urgent", "priority_color": "orange", "status": "in_treatment", "blood_group": "A+"},
             {"name": "Suresh Babu", "age": 40, "gender": "M", "complaint": "Industrial crush injury, left hand", "priority": 2, "priority_label": "Urgent", "priority_color": "orange", "status": "in_treatment", "blood_group": "B-"},
             {"name": "Kavitha Iyer", "age": 22, "gender": "F", "complaint": "Burns 20% TBSA, kitchen accident", "priority": 1, "priority_label": "Critical", "priority_color": "red", "status": "critical", "blood_group": "AB+"},
+            {"name": "Vinod Patel", "age": 54, "gender": "M", "complaint": "Pelvic fracture from auto accident", "priority": 1, "priority_label": "Critical", "priority_color": "red", "status": "critical", "blood_group": "AB+"},
+            {"name": "Meera Singh", "age": 18, "gender": "F", "complaint": "Severe burns to forearms, kitchen fire", "priority": 2, "priority_label": "Urgent", "priority_color": "orange", "status": "in_treatment", "blood_group": "A+"},
         ]
 
         # Cardiology Patients - Heart conditions
@@ -409,9 +427,10 @@ async def seed_data():
             {"name": "Betty Parker", "age": 74, "gender": "F", "complaint": "Hypertensive crisis", "priority": 1, "priority_label": "Critical", "priority_color": "red", "status": "critical", "blood_group": "A-"},
         ]
 
-        # Map patients to departments
+        # Map patients to departments. Each entry: (dept_code, patients, doctor_email, nurse_email)
         patient_groups = [
-            ("ED", ed_patients, "sarah.johnson@hospital.com", "emily.davis@hospital.com"),
+            ("ED-A", ed_a_patients, "sarah.johnson@hospital.com", "emily.davis@hospital.com"),
+            ("ED-B", ed_b_patients, "michael.chen@hospital.com", "james.wilson@hospital.com"),
             ("ECU", ecu_patients, "anil.gupta@hospital.com", "sneha.reddy@hospital.com"),
             ("TC", tc_patients, "vikram.kapoor@hospital.com", "deepak.verma@hospital.com"),
             ("OPD", opd_patients, "amanda.roberts@hospital.com", "rachel.green@hospital.com"),

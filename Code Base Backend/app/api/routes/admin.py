@@ -535,8 +535,13 @@ async def seed_patients(
     current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """Seed sample patients across all departments. Idempotent — skips if patients already exist."""
-    # Check if patients already exist
+    """Seed sample patients across all departments.
+
+    Idempotent at the per-patient level: skips any (name, department) that
+    already exists. Safe to call repeatedly to top up departments that don't
+    have enough sample patients yet — useful for demoing drill-down filters.
+    """
+    # Baseline patient counter so newly created IDs don't collide
     patient_count_result = await db.execute(
         select(func.count(Patient.id)).where(
             Patient.tenant_id == current_user.tenant_id,
@@ -544,11 +549,6 @@ async def seed_patients(
         )
     )
     existing_count = patient_count_result.scalar() or 0
-    if existing_count >= 20:
-        return {
-            "success": True,
-            "message": f"Database already has {existing_count} patients. Skipping seed."
-        }
 
     # Get departments
     dept_result = await db.execute(
@@ -593,59 +593,85 @@ async def seed_patients(
         dept_id = str(b.department_id)
         beds_by_dept.setdefault(dept_id, []).append(b)
 
-    # Sample patient data per department code
+    # Sample patient data per department code. At least 5 per department so
+    # drill-down filters have meaningful data to show in demos.
     PATIENT_DATA = {
         "ED-A": [
             {"name": "John Smith", "age": 45, "gender": "M", "complaint": "Severe chest pain radiating to left arm", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "A+"},
             {"name": "Maria Garcia", "age": 32, "gender": "F", "complaint": "High fever with severe headache and stiff neck", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "O+"},
             {"name": "Robert Johnson", "age": 58, "gender": "M", "complaint": "Difficulty breathing, history of COPD", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "B+"},
+            {"name": "Aisha Khan", "age": 36, "gender": "F", "complaint": "Acute migraine with photophobia and nausea", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "O+"},
+            {"name": "Marcus Reed", "age": 52, "gender": "M", "complaint": "Crushing chest pressure, diaphoretic", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "AB+"},
+            {"name": "Hannah Cole", "age": 24, "gender": "F", "complaint": "Suspected sepsis post-procedure", "priority": 2, "priority_label": "L2 - Emergent", "status": "pending_triage", "blood_group": "A-"},
         ],
         "ED-B": [
             {"name": "Emily Brown", "age": 28, "gender": "F", "complaint": "Severe abdominal pain, vomiting blood", "priority": 2, "priority_label": "L2 - Emergent", "status": "pending_triage", "blood_group": "AB+"},
             {"name": "David Wilson", "age": 67, "gender": "M", "complaint": "Sudden weakness on right side, slurred speech", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "O-"},
             {"name": "Linda Martinez", "age": 41, "gender": "F", "complaint": "Allergic reaction with swelling and difficulty breathing", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "A+"},
+            {"name": "Omar Hussein", "age": 49, "gender": "M", "complaint": "Severe dehydration with persistent vomiting", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "B+"},
+            {"name": "Grace Park", "age": 37, "gender": "F", "complaint": "Acute pyelonephritis, high fever", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "O+"},
+            {"name": "Felix Ortiz", "age": 63, "gender": "M", "complaint": "Atrial fibrillation with rapid ventricular response", "priority": 2, "priority_label": "L2 - Emergent", "status": "pending_triage", "blood_group": "AB-"},
         ],
         "ECU": [
             {"name": "Sunita Devi", "age": 55, "gender": "F", "complaint": "Sudden weakness, dizziness, near-syncope", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "A+"},
             {"name": "Karthik Reddy", "age": 48, "gender": "M", "complaint": "Chest discomfort with palpitations", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "B+"},
             {"name": "Anita Verma", "age": 62, "gender": "F", "complaint": "Acute gastritis with severe vomiting", "priority": 3, "priority_label": "L3 - Urgent", "status": "pending_triage", "blood_group": "O+"},
+            {"name": "Vikas Joshi", "age": 39, "gender": "M", "complaint": "Renal colic, severe flank pain", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "AB+"},
+            {"name": "Ritu Bansal", "age": 27, "gender": "F", "complaint": "Asthma exacerbation, peak flow reduced", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "A-"},
         ],
         "TC": [
             {"name": "Rahul Sharma", "age": 25, "gender": "M", "complaint": "Fall from height, suspected head injury", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "O+"},
             {"name": "Priya Nair", "age": 31, "gender": "F", "complaint": "Motor vehicle accident, open fracture right leg", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "A+"},
             {"name": "Suresh Babu", "age": 40, "gender": "M", "complaint": "Industrial crush injury, left hand", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "B-"},
+            {"name": "Anjali Kapoor", "age": 22, "gender": "F", "complaint": "Multiple lacerations from glass shards", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "O+"},
+            {"name": "Vinod Patel", "age": 54, "gender": "M", "complaint": "Pelvic fracture from auto accident", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "AB+"},
+            {"name": "Meera Singh", "age": 18, "gender": "F", "complaint": "Severe burns to forearms, kitchen fire", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "A+"},
         ],
         "OPD": [
             {"name": "Michael Lee", "age": 35, "gender": "M", "complaint": "Follow-up for diabetes management", "priority": 4, "priority_label": "L4 - Non-Urgent", "status": "pending_triage", "blood_group": "B+"},
             {"name": "Jennifer Taylor", "age": 42, "gender": "F", "complaint": "Annual health checkup", "priority": 4, "priority_label": "L4 - Non-Urgent", "status": "pending_triage", "blood_group": "O+"},
             {"name": "Christopher Moore", "age": 55, "gender": "M", "complaint": "Hypertension medication review", "priority": 4, "priority_label": "L4 - Non-Urgent", "status": "admitted", "blood_group": "A+"},
             {"name": "Amanda Martinez", "age": 29, "gender": "F", "complaint": "Persistent cough for 2 weeks", "priority": 3, "priority_label": "L3 - Urgent", "status": "pending_triage", "blood_group": "AB+"},
+            {"name": "Brian Hayes", "age": 47, "gender": "M", "complaint": "Routine cholesterol screening", "priority": 4, "priority_label": "L4 - Non-Urgent", "status": "pending_triage", "blood_group": "O-"},
+            {"name": "Sophia Reyes", "age": 33, "gender": "F", "complaint": "Thyroid follow-up consultation", "priority": 4, "priority_label": "L4 - Non-Urgent", "status": "pending_triage", "blood_group": "A+"},
         ],
         "ICU": [
             {"name": "George Harris", "age": 72, "gender": "M", "complaint": "Post cardiac surgery - triple bypass", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "O+"},
             {"name": "Patricia Clark", "age": 65, "gender": "F", "complaint": "Severe pneumonia with respiratory failure", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "A+"},
             {"name": "James Lewis", "age": 48, "gender": "M", "complaint": "Multi-organ failure - sepsis", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "B+"},
+            {"name": "Rosa Mendoza", "age": 60, "gender": "F", "complaint": "Post-op monitoring after aortic repair", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "AB+"},
+            {"name": "Henry Kim", "age": 58, "gender": "M", "complaint": "Stroke recovery with ventilator support", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "O-"},
         ],
         "GW": [
             {"name": "Nancy Young", "age": 45, "gender": "F", "complaint": "Post appendectomy - Day 2", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "A+"},
             {"name": "Steven King", "age": 56, "gender": "M", "complaint": "Diabetic foot ulcer treatment", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "B+"},
             {"name": "Dorothy Wright", "age": 68, "gender": "F", "complaint": "Hip replacement recovery - Day 4", "priority": 4, "priority_label": "L4 - Non-Urgent", "status": "admitted", "blood_group": "O+"},
+            {"name": "Albert Foster", "age": 71, "gender": "M", "complaint": "Pneumonia recovery, IV antibiotics", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "A-"},
+            {"name": "Helen Vargas", "age": 64, "gender": "F", "complaint": "Cholecystectomy recovery - Day 1", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "AB+"},
         ],
         "PED": [
             {"name": "Tommy Adams", "age": 8, "gender": "M", "complaint": "Asthma exacerbation", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "O+"},
             {"name": "Sophie Nelson", "age": 5, "gender": "F", "complaint": "High fever with ear infection", "priority": 3, "priority_label": "L3 - Urgent", "status": "pending_triage", "blood_group": "A+"},
             {"name": "Lucas Carter", "age": 12, "gender": "M", "complaint": "Fractured arm - sports injury", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "B+"},
+            {"name": "Mia Patel", "age": 4, "gender": "F", "complaint": "Severe gastroenteritis with dehydration", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "O-"},
+            {"name": "Ethan Ramirez", "age": 9, "gender": "M", "complaint": "Suspected appendicitis, RLQ tenderness", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "A+"},
         ],
         "CARD": [
             {"name": "Margaret Roberts", "age": 62, "gender": "F", "complaint": "Atrial fibrillation - rate control", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "A+"},
             {"name": "Frank Turner", "age": 70, "gender": "M", "complaint": "Congestive heart failure - fluid management", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "B+"},
             {"name": "Betty Parker", "age": 74, "gender": "F", "complaint": "Hypertensive crisis", "priority": 1, "priority_label": "L1 - Critical", "status": "admitted", "blood_group": "A-"},
+            {"name": "Walter Bennett", "age": 66, "gender": "M", "complaint": "Post-MI monitoring, day 3", "priority": 2, "priority_label": "L2 - Emergent", "status": "admitted", "blood_group": "O+"},
+            {"name": "Carol Diaz", "age": 58, "gender": "F", "complaint": "Pre-op evaluation for valve replacement", "priority": 3, "priority_label": "L3 - Urgent", "status": "admitted", "blood_group": "AB+"},
         ],
     }
 
     created = 0
     beds_assigned = 0
     patient_counter = existing_count + 1
+    # Defer bed.current_patient_id assignments until after patients are flushed,
+    # otherwise SQLAlchemy may emit the bed UPDATE before the patient INSERT
+    # and PostgreSQL rejects the FK with a beds_current_patient_id_fkey violation.
+    pending_bed_links: list[tuple[Bed, Patient]] = []
 
     for dept_code, patients_list in PATIENT_DATA.items():
         dept = departments.get(dept_code)
@@ -671,7 +697,7 @@ async def seed_patients(
             if existing.scalar_one_or_none():
                 continue
 
-            # Assign bed for admitted patients
+            # Pick a bed for admitted patients (assign later, after flush)
             bed = None
             if p_data["status"] == "admitted" and bed_idx < len(dept_beds):
                 bed = dept_beds[bed_idx]
@@ -704,7 +730,7 @@ async def seed_patients(
             db.add(patient)
 
             if bed:
-                bed.current_patient_id = patient.id
+                pending_bed_links.append((bed, patient))
                 beds_assigned += 1
 
             # Add vitals for admitted patients
@@ -727,6 +753,13 @@ async def seed_patients(
 
             created += 1
             patient_counter += 1
+
+    # Flush patient INSERTs first, then apply the bed → patient FK pointers.
+    # PatientVitals.patient_id has the same dependency, so flushing here keeps
+    # both UPDATE statements valid.
+    await db.flush()
+    for bed, patient in pending_bed_links:
+        bed.current_patient_id = patient.id
 
     await db.commit()
 

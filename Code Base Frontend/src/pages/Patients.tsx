@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { PatientCard } from '@/components/PatientCard'
 import { Button } from '@/components/ui/button'
 import { usePatients } from '@/hooks/usePatients'
-import { Plus, Search, Loader2, AlertCircle } from 'lucide-react'
+import { useDepartments } from '@/hooks/useDepartments'
+import { Plus, Search, Loader2, AlertCircle, Building2 } from 'lucide-react'
 import { Patient } from '@/data/types'
 import { NewArrivalModal } from '@/components/dashboard/NewArrivalModal'
 import { PatientDetailModal } from '@/components/dashboard/PatientDetailModal'
@@ -47,14 +48,19 @@ export default function Patients() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterPriority, setFilterPriority] = useState<number | 'all'>('all')
+  const [filterDepartment, setFilterDepartment] = useState<string>('all')
   const [newArrivalOpen, setNewArrivalOpen] = useState(false)
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
   const patientSnapshotRef = useRef<any>(null)
 
-  // Fetch patients from backend API
-  // API returns {success: true, data: {patients: [...], pagination: {...}}}
-  // Pass status='all' to fetch all patients including pending_triage
-  const { data: patientsResponse, isLoading, error } = usePatients({ status: 'all' })
+  // Fetch patients from backend API. Pass `department` so the server scopes
+  // results — far cheaper than fetching everything and filtering in JS, and
+  // lets the URL/dropdown stay consistent with how the dashboard queue scopes.
+  const { data: patientsResponse, isLoading, error } = usePatients({
+    status: 'all',
+    department: filterDepartment === 'all' ? undefined : filterDepartment,
+  })
+  const { data: departments } = useDepartments()
   const rawPatients: any[] = patientsResponse?.data?.patients || []
   const patients = rawPatients as Patient[]
 
@@ -105,6 +111,19 @@ export default function Patients() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+        </div>
+        <div className="flex items-center gap-2">
+          <Building2 className="h-4 w-4 text-muted-foreground" />
+          <select
+            value={filterDepartment}
+            onChange={(e) => setFilterDepartment(e.target.value)}
+            className="px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-background"
+          >
+            <option value="all">All Departments</option>
+            {departments?.map((d) => (
+              <option key={d.id} value={d.name}>{d.name}</option>
+            ))}
+          </select>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button

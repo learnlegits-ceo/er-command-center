@@ -587,11 +587,13 @@ export function NewArrivalModal({ open, onOpenChange, defaultDepartmentName }: N
                   disabled={departmentsLoading}
                 >
                   <option value="">Select department...</option>
-                  {departments?.map((dept) => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </option>
-                  ))}
+                  {departments
+                    ?.filter((dept) => departmentNameToPath[dept.name])
+                    .map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
                 </select>
                 <ErrorMsg msg={fieldErrors.department} />
               </div>
