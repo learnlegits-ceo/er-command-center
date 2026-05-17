@@ -442,13 +442,19 @@ export default function Admin() {
   const [policeError, setPoliceError] = useState('')
   const [policeSuccess, setPoliceSuccess] = useState('')
 
-  // Load staff from backend
+  // Load staff from backend. Pass status='all' so inactive members are not
+  // silently dropped from the list — admins need to see deactivated staff too.
   const loadStaff = async () => {
     setIsLoading(true)
+    setError('')
     try {
-      const response = await endpoints.admin.getStaff()
-      if (response.data.success) {
+      const response = await endpoints.admin.getStaff({ status: 'all' })
+      if (response.data.success && response.data.data) {
         const { staff: staffData, counts } = response.data.data
+        if (!Array.isArray(staffData)) {
+          setError('Staff data missing from server response. Try refreshing.')
+          return
+        }
         setStaff(staffData.map((s: any) => ({
           id: s.id,
           name: s.name,
@@ -460,11 +466,21 @@ export default function Admin() {
           status: s.status as 'active' | 'inactive',
           joinDate: s.joinedAt || ''
         })))
-        setStats(counts)
+        if (counts) setStats(counts)
+      } else {
+        setError(response.data?.error || 'Server returned an unexpected response. Try refreshing.')
       }
     } catch (err: any) {
       console.error('Failed to load staff:', err)
-      setError('Failed to load staff data. Using offline mode.')
+      const detail = err?.response?.data?.detail
+      const statusCode = err?.response?.status
+      if (statusCode === 401) {
+        setError('Your session has expired. Please log out and sign in again.')
+      } else if (statusCode === 403) {
+        setError('Your account does not have admin permissions.')
+      } else {
+        setError(typeof detail === 'string' ? detail : 'Failed to load staff. Click Refresh to retry.')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -875,19 +891,39 @@ export default function Admin() {
       {/* Staff Management */}
       <div className="bg-card border rounded-lg">
         <div className="p-4 border-b">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-foreground">Staff Management</h2>
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search staff..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-foreground">
+              Staff Management
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                ({staff.length} member{staff.length === 1 ? '' : 's'})
+              </span>
+            </h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={loadStaff}
+                disabled={isLoading}
+                className="text-xs px-3 py-1.5 border rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
+                title="Reload staff from server"
+              >
+                {isLoading ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Refresh'}
+              </button>
+              <div className="relative w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search staff..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
             </div>
           </div>
+          {error && (
+            <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+              {error}
+            </div>
+          )}
         </div>
 
         {isLoading ? (

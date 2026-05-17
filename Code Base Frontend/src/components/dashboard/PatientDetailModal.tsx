@@ -1,11 +1,12 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { X, Activity, ClipboardList, MessageSquare, Camera, User, Bed, Clock, Hash, Plus, FileText, Pill, LogOut as DischargeIcon, Pencil, ArrowRight, Sparkles, ChevronDown, ChevronUp, BarChart2, FlaskConical, Users } from 'lucide-react';
+import { X, Activity, ClipboardList, MessageSquare, Camera, User, Bed, Clock, Hash, Plus, FileText, Pill, LogOut as DischargeIcon, Pencil, ArrowRight, Sparkles, ChevronDown, ChevronUp, BarChart2, FlaskConical, Users, Loader2 } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
 import { PrescribeModal } from './PrescribeModal';
 import { DischargeModal } from './DischargeModal';
 import { EditPatientModal } from './EditPatientModal';
 import { usePatientVitals, usePatientTriageTimeline, useAddVitals, useRecommendTriageShift, useShiftTriage, useTransferToOPD, usePatientNotes, useCreateNote, usePatientPrescriptions } from '@/hooks/usePatientDetails';
+import { useBeds, useAssignBed } from '@/hooks/useBeds';
 
 interface VitalRecord {
   id: string;
@@ -75,6 +76,7 @@ interface Patient {
   assignedDoctor: string;
   bed?: string;
   bedId?: string;
+  department?: string;
   phone?: string;
   bloodGroup?: string;
   arrivedAt: string;
@@ -118,6 +120,96 @@ function formatRecordedDate(dateStr: string | null | undefined): string {
     return `${diffHours}h ago · ${d.toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
   }
   return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+// Small inline control: shows the patient's assigned bed, or — when the patient
+// has none — a picker of available beds in their department so any staff member
+// can assign one without leaving the patient detail modal.
+function BedAssignmentControl({ patient }: { patient: { id: string; bed?: string; bedId?: string; department?: string } }) {
+  const [picking, setPicking] = useState(false);
+  const [selectedBedId, setSelectedBedId] = useState('');
+  const [err, setErr] = useState('');
+  const { data: bedsResp } = useBeds(patient.department ? { department: patient.department } : undefined);
+  const assignBed = useAssignBed();
+
+  if (patient.bed) {
+    return (
+      <div className="flex items-center gap-1">
+        <Bed className="w-3 h-3" />
+        <span>Bed {patient.bed}</span>
+      </div>
+    );
+  }
+
+  const beds: any[] = bedsResp?.data || [];
+  const availableBeds = beds.filter((b) => b.status === 'available');
+
+  const handleAssign = async () => {
+    if (!selectedBedId) return;
+    setErr('');
+    try {
+      await assignBed.mutateAsync({ bedId: selectedBedId, patientId: patient.id });
+      setPicking(false);
+      setSelectedBedId('');
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail || 'Failed to assign bed.');
+    }
+  };
+
+  if (!picking) {
+    return (
+      <div className="flex items-center gap-2">
+        <Bed className="w-3 h-3" />
+        <span>No bed assigned</span>
+        <button
+          onClick={() => { setPicking(true); setErr(''); }}
+          className="text-primary hover:underline text-xs font-medium ml-1"
+        >
+          Assign bed
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <Bed className="w-3 h-3" />
+      {availableBeds.length === 0 ? (
+        <span className="text-xs text-orange-600">
+          No available beds{patient.department ? ` in ${patient.department}` : ''}
+        </span>
+      ) : (
+        <select
+          value={selectedBedId}
+          onChange={(e) => setSelectedBedId(e.target.value)}
+          className="text-xs px-2 py-0.5 border rounded bg-background"
+          autoFocus
+        >
+          <option value="">Select bed…</option>
+          {availableBeds.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.bedNumber || b.number}
+              {(b.bedType || b.type) ? ` · ${b.bedType || b.type}` : ''}
+            </option>
+          ))}
+        </select>
+      )}
+      <button
+        onClick={handleAssign}
+        disabled={!selectedBedId || assignBed.isPending || availableBeds.length === 0}
+        className="text-xs px-2 py-0.5 bg-primary text-primary-foreground rounded disabled:opacity-50"
+      >
+        {assignBed.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Assign'}
+      </button>
+      <button
+        onClick={() => { setPicking(false); setErr(''); }}
+        className="text-xs text-muted-foreground hover:text-foreground"
+      >
+        Cancel
+      </button>
+      {err && <span className="text-xs text-red-600 w-full">{err}</span>}
+    </div>
+  );
 }
 
 export function PatientDetailModal({ patient, open, onOpenChange }: PatientDetailModalProps) {
@@ -520,10 +612,7 @@ export function PatientDetailModal({ patient, open, onOpenChange }: PatientDetai
                   <User className="w-3 h-3" />
                   <span>{patient.assignedDoctor}</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Bed className="w-3 h-3" />
-                  <span>{patient.bed ? `Bed ${patient.bed}` : 'No bed assigned'}</span>
-                </div>
+                <BedAssignmentControl patient={patient} />
                 <div className="flex items-center gap-1">
                   <Clock className="w-3 h-3" />
                   <span>Arrived {patient.arrivedAt}</span>

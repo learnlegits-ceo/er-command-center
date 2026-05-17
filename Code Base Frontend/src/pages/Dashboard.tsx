@@ -187,6 +187,7 @@ export default function Dashboard() {
         waitTime: calculateArrivalHours(patient.admittedAt),
         bed: patient.bed,
         bedId: patient.bedId,
+        department: patient.department,
         phone: patient.phone || '',
         bloodGroup: patient.bloodGroup || '',
         arrivedAt: patient.admittedAt ? new Date(patient.admittedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '',

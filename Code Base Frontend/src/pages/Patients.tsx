@@ -34,6 +34,7 @@ function transformPatientForModal(patient: any) {
     estimatedWaitTime: patient.triage?.estimatedWaitTime || null,
     bed: patient.bed,
     bedId: patient.bedId,
+    department: patient.department,
     phone: patient.phone || '',
     bloodGroup: patient.bloodGroup || '',
     arrivedAt: patient.admittedAt

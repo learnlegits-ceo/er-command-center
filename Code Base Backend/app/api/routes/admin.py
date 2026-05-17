@@ -11,7 +11,7 @@ from typing import Optional
 from app.db.database import get_db
 from app.models.user import User, UserSettings
 from app.models.department import Department
-from app.models.bed import Bed
+from app.models.bed import Bed, BedAssignment
 from app.models.patient import Patient, PatientVitals
 from app.models.alert import Alert
 from app.models.audit import AuditLog
@@ -766,6 +766,80 @@ async def seed_patients(
     return {
         "success": True,
         "message": f"Created {created} sample patients ({beds_assigned} with beds assigned) across departments."
+    }
+
+
+@router.post("/auto-assign-beds", response_model=dict)
+async def auto_assign_beds(
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Find admitted patients without beds and assign any available bed.
+
+    Prefers a bed in the patient's own department; falls back to any
+    available bed in the tenant if the dept is full. Updates bed.status,
+    bed.current_patient_id, patient.bed_id atomically per assignment.
+    """
+    # Patients who should have a bed but don't
+    pts_result = await db.execute(
+        select(Patient).where(
+            Patient.tenant_id == current_user.tenant_id,
+            Patient.deleted_at.is_(None),
+            Patient.bed_id.is_(None),
+            Patient.status.in_(["admitted", "in_treatment", "critical", "stable"]),
+        )
+    )
+    candidates = list(pts_result.scalars().all())
+    if not candidates:
+        return {"success": True, "message": "No patients need bed assignment.", "data": {"assigned": 0}}
+
+    # All currently-available beds, indexed by dept so we can prefer same-dept
+    beds_result = await db.execute(
+        select(Bed).where(
+            Bed.tenant_id == current_user.tenant_id,
+            Bed.status == "available",
+            Bed.is_active == True,
+        ).order_by(Bed.bed_number)
+    )
+    available = list(beds_result.scalars().all())
+    by_dept: dict = {}
+    for b in available:
+        by_dept.setdefault(str(b.department_id), []).append(b)
+
+    assigned = 0
+    overflow = 0
+    for patient in candidates:
+        bed = None
+        if patient.department_id:
+            same_dept = by_dept.get(str(patient.department_id), [])
+            if same_dept:
+                bed = same_dept.pop(0)
+        if bed is None:
+            # Fall back to any available bed
+            for dept_id, beds_list in by_dept.items():
+                if beds_list:
+                    bed = beds_list.pop(0)
+                    overflow += 1
+                    break
+        if bed is None:
+            continue  # no beds left anywhere
+
+        bed.status = "occupied"
+        bed.current_patient_id = patient.id
+        bed.assigned_at = datetime.utcnow()
+        patient.bed_id = bed.id
+        db.add(BedAssignment(
+            bed_id=bed.id,
+            patient_id=patient.id,
+            assigned_by=current_user.id,
+        ))
+        assigned += 1
+
+    await db.commit()
+    return {
+        "success": True,
+        "message": f"Assigned {assigned} beds ({overflow} placed outside their home department due to capacity).",
+        "data": {"assigned": assigned, "overflow": overflow, "unassigned": len(candidates) - assigned},
     }
 
 
