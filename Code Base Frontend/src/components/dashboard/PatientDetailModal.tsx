@@ -170,7 +170,16 @@ function BedAssignmentControl({ patient }: { patient: { id: string; bed?: string
       setPicking(false);
       setSelectedBedId('');
     } catch (e: any) {
-      setErr(e?.response?.data?.detail || 'Failed to assign bed.');
+      // FastAPI 422s return detail as an array of validation errors. Rendering
+      // an array/object as a React child crashes the tree and trips the global
+      // ErrorBoundary — always coerce to a printable string here.
+      const detail = e?.response?.data?.detail;
+      let msg = 'Failed to assign bed.';
+      if (typeof detail === 'string') msg = detail;
+      else if (Array.isArray(detail) && detail.length) {
+        msg = detail.map((d: any) => d?.msg || JSON.stringify(d)).join('; ');
+      } else if (detail) msg = JSON.stringify(detail);
+      setErr(msg);
     }
   };
 

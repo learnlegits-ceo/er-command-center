@@ -148,7 +148,7 @@ export const endpoints = {
     getAll: (params?: { department?: string }) => api.get('/beds', { params }),
     getById: (id: string) => api.get(`/beds/${id}`),
     updateStatus: (id: string, status: string) => api.patch(`/beds/${id}/status`, { status }),
-    assign: (id: string, patientId: string) => api.post(`/beds/${id}/assign`, { patientId }),
+    assign: (id: string, patientId: string) => api.post(`/beds/${id}/assign`, { patient_id: patientId }),
     release: (id: string) => api.post(`/beds/${id}/release`),
   },
 
