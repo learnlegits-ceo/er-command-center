@@ -597,7 +597,11 @@ async def create_patient(
         assigned_bed = bed_result.scalar_one_or_none()
 
     if not assigned_bed and patient.department_id:
-        # Auto-assign: only from the patient's own department
+        # Auto-assign: prefer the patient's own department, then overflow into
+        # any other department if the home dept is at capacity. A registered
+        # patient should always get a bed if any exists in the tenant —
+        # leaving an admitted patient unassigned just because their dept is
+        # full creates the "patient with no bed" problem on the floor.
         bed_query = select(Bed).where(
             Bed.tenant_id == current_user.tenant_id,
             Bed.department_id == patient.department_id,
@@ -606,6 +610,15 @@ async def create_patient(
         ).order_by(Bed.bed_number).limit(1)
         bed_result = await db.execute(bed_query)
         assigned_bed = bed_result.scalar_one_or_none()
+
+        if not assigned_bed:
+            overflow_query = select(Bed).where(
+                Bed.tenant_id == current_user.tenant_id,
+                Bed.status == "available",
+                Bed.is_active == True
+            ).order_by(Bed.bed_number).limit(1)
+            overflow_result = await db.execute(overflow_query)
+            assigned_bed = overflow_result.scalar_one_or_none()
 
     if assigned_bed:
         assigned_bed.status = "occupied"

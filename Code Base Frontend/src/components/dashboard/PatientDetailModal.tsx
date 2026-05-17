@@ -129,7 +129,10 @@ function BedAssignmentControl({ patient }: { patient: { id: string; bed?: string
   const [picking, setPicking] = useState(false);
   const [selectedBedId, setSelectedBedId] = useState('');
   const [err, setErr] = useState('');
-  const { data: bedsResp } = useBeds(patient.department ? { department: patient.department } : undefined);
+  // Fetch ALL beds in the tenant. The picker prefers the patient's home
+  // department, but if it's at capacity we surface overflow beds from other
+  // departments rather than blocking the assignment.
+  const { data: bedsResp } = useBeds();
   const assignBed = useAssignBed();
 
   if (patient.bed) {
@@ -141,8 +144,23 @@ function BedAssignmentControl({ patient }: { patient: { id: string; bed?: string
     );
   }
 
-  const beds: any[] = bedsResp?.data || [];
-  const availableBeds = beds.filter((b) => b.status === 'available');
+  const allBeds: any[] = bedsResp?.data || [];
+  const available = allBeds.filter((b) => b.status === 'available');
+
+  // Bed shape: department can be the dept name (string) or an embedded
+  // object {name, code}. Normalize to a string for comparison + display.
+  const bedDeptName = (b: any): string => {
+    const d = b.department;
+    if (!d) return '';
+    return typeof d === 'string' ? d : (d.name || '');
+  };
+
+  const homeBeds = patient.department
+    ? available.filter((b) => bedDeptName(b) === patient.department)
+    : [];
+  const overflowBeds = patient.department
+    ? available.filter((b) => bedDeptName(b) !== patient.department)
+    : available;
 
   const handleAssign = async () => {
     if (!selectedBedId) return;
@@ -171,13 +189,17 @@ function BedAssignmentControl({ patient }: { patient: { id: string; bed?: string
     );
   }
 
+  const bedLabel = (b: any) => {
+    const num = b.bedNumber || b.number;
+    const type = b.bedType || b.type;
+    return type ? `${num} · ${type}` : num;
+  };
+
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <Bed className="w-3 h-3" />
-      {availableBeds.length === 0 ? (
-        <span className="text-xs text-orange-600">
-          No available beds{patient.department ? ` in ${patient.department}` : ''}
-        </span>
+      {available.length === 0 ? (
+        <span className="text-xs text-orange-600">No available beds anywhere in the hospital</span>
       ) : (
         <select
           value={selectedBedId}
@@ -185,18 +207,31 @@ function BedAssignmentControl({ patient }: { patient: { id: string; bed?: string
           className="text-xs px-2 py-0.5 border rounded bg-background"
           autoFocus
         >
-          <option value="">Select bed…</option>
-          {availableBeds.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.bedNumber || b.number}
-              {(b.bedType || b.type) ? ` · ${b.bedType || b.type}` : ''}
-            </option>
-          ))}
+          <option value="">
+            Select bed…
+            {patient.department && homeBeds.length === 0 ? ` (${patient.department} full — overflow shown)` : ''}
+          </option>
+          {homeBeds.length > 0 && (
+            <optgroup label={`${patient.department} (home department)`}>
+              {homeBeds.map((b) => (
+                <option key={b.id} value={b.id}>{bedLabel(b)}</option>
+              ))}
+            </optgroup>
+          )}
+          {overflowBeds.length > 0 && (
+            <optgroup label={patient.department ? 'Other departments (overflow)' : 'Available beds'}>
+              {overflowBeds.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {bedLabel(b)}{bedDeptName(b) ? ` — ${bedDeptName(b)}` : ''}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
       )}
       <button
         onClick={handleAssign}
-        disabled={!selectedBedId || assignBed.isPending || availableBeds.length === 0}
+        disabled={!selectedBedId || assignBed.isPending || available.length === 0}
         className="text-xs px-2 py-0.5 bg-primary text-primary-foreground rounded disabled:opacity-50"
       >
         {assignBed.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Assign'}
