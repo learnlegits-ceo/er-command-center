@@ -540,11 +540,16 @@ export function PatientDetailModal({ patient, open, onOpenChange }: PatientDetai
   };
 
   const isEligibleForOPDTransfer = (): boolean => {
-    if (patient.triageLevel !== 3 && patient.triageLevel !== 4) return false;
-    if ((patient as any).status !== 'active') return false;
-    if (!triageTimeline || triageTimeline.length < 2) return false;
-    const latest = triageTimeline[0];
-    return latest.fromPriority !== null && latest.toPriority > latest.fromPriority;
+    // OPD is for stable / non-urgent patients. Block when:
+    //  - the patient is already gone (discharged or transferred), or
+    //  - their triage level says they're critical (L1) — they need the ER.
+    // Everyone else (L2/L3/L4 plus patients still awaiting triage) can be
+    // pushed to OPD if the staff member judges it appropriate. The backend
+    // also rejects already-discharged/transferred patients, so this matches.
+    const pstatus = (patient as any).status;
+    if (pstatus === 'discharged' || pstatus === 'transferred_to_opd') return false;
+    if (patient.triageLevel === 1) return false;
+    return true;
   };
 
   const getCategoryColor = (category: string) => {
@@ -1056,7 +1061,7 @@ export function PatientDetailModal({ patient, open, onOpenChange }: PatientDetai
                         className="flex items-center gap-2 px-4 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
                       >
                         <ArrowRight className="w-3 h-3" />
-                        Push to OPD
+                        Shift to OPD
                       </button>
                     </div>
                   </div>
@@ -1625,7 +1630,7 @@ export function PatientDetailModal({ patient, open, onOpenChange }: PatientDetai
                 className="flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm font-medium"
               >
                 <ArrowRight className="w-4 h-4" />
-                Push to OPD
+                Shift to OPD
               </button>
             )}
           </div>
